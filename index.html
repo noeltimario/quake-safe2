@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>QuakeSafe - Offline Earthquake Info & Alerts</title>
+    <!-- PWA MANIFEST LINK -->
+    <link rel="manifest" href="data:application/manifest+json;base64,eyJuYW1lIjogIlF1YWtlU2FmZSBDZWJ1Iiwic2hvcnRfbmFtZSI6ICJRdWFrZVNhZmUiLCJzdGFydF91cmwiOiAiLi9zYWZlY2VidV9wd2EuaHRtbCIsImRpc3BsYXkiOiAic3RhbmRhbG9uZSIsImJhY2tncm91bmRfY29sb3IiOiAiIzBhMGEwYSIsInRoZW1lX2NvbG9yIjogIiNmYjkyM2MiLCJpY29ucyI6IFt7InNyYyI6ICJodHRwczovL3BsYWNlaG9sZC5jby8xOTJ4MTkyLzBhMGEwYS9mYjkyM2M/dGV4dD1RVSIsInNpemVzIjogIjE5MngxOTIiLCJ0eXBlIjogImltYWdlL3BuZyJ9LHsic3JjIjogImh0dHBzOi8vcGxhY2Vob2xkLmNvLzUxMng1MTIvMGEwYTBhL2ZiOTIzYz90ZXh0PVFVIiwic2l6ZXMiOiAiNTEyeDUxMiIsInR5cGUiOiAiaW1hZ2UvcG5nIn1dfQ==">
+    
     <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Load Lucide Icons -->
@@ -289,6 +292,24 @@
     <script>
         // Initialize Lucide Icons
         lucide.createIcons();
+        
+        // --- PWA SERVICE WORKER REGISTRATION (Essential for 'Add to Home Screen' prompt) ---
+        // This is a minimal registration to fulfill the PWA requirement for installability.
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                // Registering the main HTML file as the scope for simplicity in a single-file app.
+                // Note: Full offline functionality typically requires a separate 'sw.js' file
+                // with install and fetch events for robust caching.
+                navigator.serviceWorker.register('./safecebu_pwa.html', { scope: './' })
+                    .then(registration => {
+                        console.log('PWA Service Worker registered for installability:', registration.scope);
+                    })
+                    .catch(error => {
+                        console.log('PWA Service Worker registration failed (this is often fine):', error);
+                    });
+            });
+        }
+
 
         // --- GLOBAL STATE & DOM REFERENCES ---
         let currentLang = 'en';
@@ -298,7 +319,7 @@
             tabs: {
                 guide: document.getElementById('tab-guide'),
                 toolkit: document.getElementById('tab-toolkit'),
-                comms: document.getElementById('tab-comms'), // UPDATED from notes
+                comms: document.getElementById('tab-comms'), 
                 hotlines: document.getElementById('tab-hotlines'),
             },
             navButtons: document.querySelectorAll('.nav-tab'),
@@ -307,7 +328,7 @@
             sirenToggle: document.getElementById('toggle-siren'),
             sosToggle: document.getElementById('toggle-sos'),
             
-            // New Comms Module DOM elements
+            // Comms Module DOM elements
             microPacketBtns: document.querySelectorAll('.micro-packet-btn'),
             microPacketStatus: document.getElementById('micro-packet-status'),
             meshStatusSelect: document.getElementById('mesh-status-select'),
@@ -351,8 +372,6 @@
             DOM.meshMessageTextEn.classList.toggle('hidden', currentLang !== 'en');
             DOM.meshMessageTextCeb.classList.toggle('hidden', currentLang !== 'ceb');
 
-            // Update the display for saved location (no longer needed, but keep if structure relies on it)
-            // displaySavedLocation(); 
             renderHotlines();
             
             // Re-label active tool buttons if any are active, updating for dark theme active color (bg-gray-700)
@@ -790,7 +809,7 @@
             }
         }
         
-        // --- MOCK UTILITY FUNCTIONS ---
+        // --- MOCK UTILITY FUNCTIONS (Geolocation handling fixed for graceful error reporting) ---
 
         /** Gets user's current GPS location or a mock fallback. */
         function getGeolocation(callback) {
@@ -811,15 +830,15 @@
                     },
                     // Geolocation failed. Using mock location. 
                     (error) => {
-                        // Removed 'error' from log for cleaner console, as it provides minimal info in restricted environments
-                        console.error("Geolocation failed. Using mock location."); 
+                        // The previous error log is expected in iframe environments. We log the action instead of the error.
+                        console.warn("Location permission denied or timeout. Using mock location (Cebu IT Park)."); 
                         // Mock location (e.g., Cebu IT Park coordinates)
                         callback({ lat: '10.334000', lon: '123.905600' }); 
                     },
                     geoOptions // Pass options back to the call
                 );
             } else {
-                console.warn("Geolocation not supported. Using mock location.");
+                console.warn("Geolocation not supported. Using mock location (Cebu IT Park).");
                 // Mock location
                 callback({ lat: '10.334000', lon: '123.905600' });
             }

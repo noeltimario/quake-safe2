@@ -1,1178 +1,1173 @@
-﻿<!-- Chosen Palette: Dark Mode (Inspired by image) -->
+<!-- Chosen Palette: Dark Mode (Inspired by image) -->
+
 <!-- Application Structure Plan: A multi-section, single-page application design was chosen to provide a clear, task-oriented user experience. The structure uses a persistent bottom navigation bar to switch between four distinct sections: 1) a "Home" dashboard for immediate situational awareness (sync status, critical advisories, latest bulletins, and a new data visualization of seismic activity); 2) a "Safety" section for proactive, AI-generated preparedness guides; 3) a "Maps" section with AI-powered tools for location-specific hazard search and the new Request Help and Rescuer Alerts; and 4) a "Reports" section for community-driven interaction, including an emergency SOS beacon and a real-time feed of user-submitted reports. This architecture separates official data from user-generated content and tools, preventing cognitive overload and allowing users to navigate directly to the information or action they need most during a crisis. The flow is designed to be intuitive and mobile-first, prioritizing clarity and speed of access. The 'Reports' page now serves as the 'Emergency SOS & Contacts' hub. -->
+
 <!-- Visualization & Content Choices: Report Info: Recent earthquake events (magnitude, depth, date). -> Goal: Compare & see relationships. -> Viz/Method: Interactive Bubble Chart showing depth vs. date, with bubble size representing magnitude. -> Interaction: Tooltip on hover displays detailed info for each quake. -> Library/Method: Chart.js (Canvas). Report Info: Official Advisories & Bulletins. -> Goal: Inform. -> Viz/Method: Styled HTML cards with clear typography and color-coding for severity. -> Interaction: None. -> Justification: Cards are highly scannable on mobile for urgent information. -> Library/Method: HTML/CSS. Report Info: Safety Guides. -> Goal: Inform. -> Viz/Method: Dynamically updated text block. -> Interaction: User selects topic via buttons to trigger AI content generation. -> Justification: Keeps UI clean by showing only relevant information on demand. -> Library/Method: JS/API. Report Info: Community-submitted reports. -> Goal: Organize & Inform. -> Viz/Method: Real-time feed of styled cards. -> Interaction: Form submission. -> Justification: Provides live, ground-truth information from other users. -> Library/Method: HTML/CSS + Firebase. -->
+
 <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+
 <!doctype html>
+
 <html lang="en">
+
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>QuakeSafe - Interactive Disaster Hub</title>
 
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <meta charset="UTF-8" />
 
-    <!-- Date Adapter for Chart.js 'time' scale -->
-    <script src="https://cdn.jsdelivr.net/npm/date-fns/dist/date-fns.umd.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-    <!-- Firebase SDK (Compat versions for global access in single HTML file) -->
-    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+    <title>QuakeSafe - Interactive Disaster Hub</title>
 
-    <!-- React and Babel (Use createRoot for React 18 compatibility) -->
-    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
 
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Fira+Code&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
 
-    <style>
-        /* UPDATED: Global Dark Background based on user's image */
-        body {
-            background-color: #1A202C;
-            font-family: 'Inter', sans-serif;
-            color: #E2E8F0; /* Light text for dark background */
-        }
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-        .chart-container {
-            position: relative;
-            width: 100%;
-            max-width: 800px;
-            margin-left: auto;
-            margin-right: auto;
-            height: 300px;
-        }
+    
 
-        @media (min-width: 640px) {
-            .chart-container {
-                height: 400px;
-            }
-        }
+    <!-- Date Adapter for Chart.js 'time' scale -->
 
-        /* Typography adjustments for Dark Mode */
-        .prose {
-            line-height: 1.6;
-        }
+    <script src="https://cdn.jsdelivr.net/npm/date-fns/dist/date-fns.umd.min.js"></script>
 
-            .prose h3 {
-                font-size: 1.25rem;
-                font-weight: 800;
-                margin-top: 1.5rem;
-                margin-bottom: 0.5rem;
-                color: #CBD5E0; /* Lighter heading color */
-            }
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
 
-            .prose p, .prose li {
-                font-size: 1rem;
-                line-height: 1.6;
-                color: #A0AEC0; /* Subdued text color */
-            }
+    
 
-            .prose ul, .prose ol {
-                padding-left: 1.5rem;
-                list-style-type: disc; /* Ensure lists display correctly */
-            }
+    <!-- Firebase SDK (Compat versions for global access in single HTML file) -->
 
-        /* Styling for the Reports Page (which was already dark, now ensuring consistency) */
-        .reports-dark-bg {
-            background-color: #1A202C; /* Match body background */
-            min-height: 100vh;
-        }
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 
-        .reports-text-light {
-            color: #E2E8F0;
-        }
-        /* Ensure dark cards look good on the dark background */
-        .reports-card-dark {
-            background-color: #2D3748;
-            border-color: #4A5568;
-            color: #E2E8F0;
-        }
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 
-        /* Toast notification styles */
-        .toast {
-            position: fixed;
-            bottom: 6rem;
-            left: 50%;
-            transform: translateX(-50%);
-            color: white;
-            padding: 1rem 1.5rem;
-            border-radius: 0.5rem;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.5);
-            opacity: 0;
-            transition: opacity 0.3s ease-in-out;
-            z-index: 100;
-        }
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 
-            .toast.show {
-                opacity: 1;
-            }
 
-        /* Full-screen flash overlay for MapsPage */
-        .flash-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            z-index: 50; /* Below toast, above content */
-            pointer-events: none; /* Allows clicks to pass through */
-            transition: background-color 0.1s ease-in-out;
-        }
-    </style>
 
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        // UPDATED DARK MODE PALETTE
-                        'background': '#1A202C', // Deep Slate/Navy
-                        'surface': '#2D3748',    // Slightly lighter card/component background
-                        'primary': '#4299E1',    // Vibrant Blue for primary actions/links (was brown)
-                        'secondary': '#4A5568',  // Border/Divider color
-                        'text-primary': '#E2E8F0', // Near White for main text
-                        'text-secondary': '#A0AEC0', // Light Gray for sub-text
-                        'accent-red': '#E53E3E', // Red for critical alerts
-                        'accent-orange': '#F6AD55', // Orange for high alerts
-                        'accent-blue': '#4299E1', // Primary blue
-                        'accent-green': '#48BB78', // Green for success/online
-                        // Custom colors
-                        'sync-blue': '#3B82F6', // Brighter blue for sync button
-                        'help-red': '#E53E3E',  // Red for request help button (same as accent-red)
-                        'help-red-hover': '#C53030',
-                    },
-                    fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
-                        mono: ['Fira Code', 'monospace'],
-                    }
-                }
-            }
-        }
-    </script>
+    <!-- React and Babel (Use createRoot for React 18 compatibility) -->
+
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Fira+Code&display=swap" rel="stylesheet">
+
+
+
+    <style>
+
+        /* UPDATED: Global Dark Background based on user's image */
+
+        body {
+
+            background-color: #1A202C; 
+
+            font-family: 'Inter', sans-serif;
+
+            color: #E2E8F0; /* Light text for dark background */
+
+        }
+
+        .chart-container {
+
+            position: relative;
+
+            width: 100%;
+
+            max-width: 800px;
+
+            margin-left: auto;
+
+            margin-right: auto;
+
+            height: 300px;
+
+        }
+
+        @media (min-width: 640px) {
+
+            .chart-container {
+
+                height: 400px;
+
+            }
+
+        }
+
+        
+
+        /* Typography adjustments for Dark Mode */
+
+        .prose h3 {
+
+            font-size: 1.25rem;
+
+            font-weight: 800;
+
+            margin-top: 1.5rem;
+
+            margin-bottom: 0.5rem;
+
+            color: #CBD5E0; /* Lighter heading color */
+
+        }
+
+        .prose p, .prose li {
+
+            font-size: 1rem;
+
+            line-height: 1.6;
+
+            color: #A0AEC0; /* Subdued text color */
+
+        }
+
+        .prose ul, .prose ol {
+
+            padding-left: 1.5rem;
+
+        }
+
+
+
+        /* Styling for the Reports Page (which was already dark, now ensuring consistency) */
+
+        .reports-dark-bg {
+
+            background-color: #1A202C; /* Match body background */
+
+            min-height: 100vh;
+
+        }
+
+        .reports-text-light {
+
+            color: #E2E8F0;
+
+        }
+
+        /* Ensure dark cards look good on the dark background */
+
+        .reports-card-dark {
+
+            background-color: #2D3748;
+
+            border-color: #4A5568;
+
+            color: #E2E8F0;
+
+        }
+
+        
+
+        /* Toast notification styles */
+
+        .toast {
+
+            position: fixed;
+
+            bottom: 6rem;
+
+            left: 50%;
+
+            transform: translateX(-50%);
+
+            color: white;
+
+            padding: 1rem 1.5rem;
+
+            border-radius: 0.5rem;
+
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.5);
+
+            opacity: 0;
+
+            transition: opacity 0.3s ease-in-out;
+
+            z-index: 100;
+
+        }
+
+        .toast.show {
+
+            opacity: 1;
+
+        }
+
+        
+
+        /* Full-screen flash overlay for MapsPage */
+
+        .flash-overlay {
+
+            position: fixed;
+
+            top: 0;
+
+            left: 0;
+
+            width: 100vw;
+
+            height: 100vh;
+
+            z-index: 50; /* Below toast, above content */
+
+            pointer-events: none; /* Allows clicks to pass through */
+
+            transition: background-color 0.1s ease-in-out;
+
+        }
+
+    </style>
+
+    
+
+    <script>
+
+      tailwind.config = {
+
+        theme: {
+
+          extend: {
+
+            colors: {
+
+              // UPDATED DARK MODE PALETTE
+
+              'background': '#1A202C', // Deep Slate/Navy
+
+              'surface': '#2D3748',    // Slightly lighter card/component background
+
+              'primary': '#4299E1',    // Vibrant Blue for primary actions/links (was brown)
+
+              'secondary': '#4A5568',  // Border/Divider color
+
+              'text-primary': '#E2E8F0', // Near White for main text
+
+              'text-secondary': '#A0AEC0', // Light Gray for sub-text
+
+              'accent-red': '#E53E3E', // Red for critical alerts
+
+              'accent-orange': '#F6AD55', // Orange for high alerts
+
+              'accent-blue': '#4299E1', // Primary blue
+
+              'accent-green': '#48BB78', // Green for success/online
+
+              // Custom colors
+
+              'sync-blue': '#3B82F6', // Brighter blue for sync button
+
+              'help-red': '#E53E3E',  // Red for request help button (same as accent-red)
+
+              'help-red-hover': '#C53030', 
+
+            },
+
+            fontFamily: {
+
+              sans: ['Inter', 'sans-serif'],
+
+              mono: ['Fira Code', 'monospace'],
+
+            }
+
+          }
+
+        }
+
+      }
+
+    </script>
+
 </head>
+
 <body class="bg-background">
-    <div id="root"></div>
-
-    <script type="text/babel">
-        const { useState, createContext, useContext, useEffect, useCallback, useRef } = React;
-
-        // --- 0. API & Firebase Configuration ---
-        const API_KEY = "";
-        const API_MODEL = "gemini-2.5-flash-preview-05-20";
-        const cn = (...classes) => classes.filter(Boolean).join(' ');
-
-        // API call function with retry logic and optional grounding
-        async function callApiWithRetry(payload, useGrounding = false) {
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${API_MODEL}:generateContent?key=${API_KEY}`;
-            if (useGrounding) {
-                payload.tools = [{ "google_search": {} }];
-            }
-            for (let i = 0; i < 3; i++) {
-                try {
-                    const response = await fetch(apiUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
-                    });
-                    if (!response.ok) throw new Error(`API Error: ${response.status}`);
-                    return await response.json();
-                } catch (error) {
-                    if (i === 2) throw error;
-                    await new Promise(res => setTimeout(res, 1000 * Math.pow(2, i)));
-                }
-            }
-        }
-
-        const FirebaseContext = createContext(null);
-        const useFirebase = () => useContext(FirebaseContext);
-
-        function FirebaseProvider({ children }) {
-            const [services, setServices] = useState({ db: null, auth: null, userId: null, isReady: false, appId: 'default' });
-            useEffect(() => {
-                try {
-                    // Check if the global 'firebase' object is loaded before proceeding
-                    if (typeof firebase === 'undefined' || typeof firebase.initializeApp === 'undefined') {
-                        throw new Error("Firebase SDK is not loaded. Please check script tags.");
-                    }
-
-                    const fireBaseGlobal = window.firebase;
-
-                    const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-                    const app = fireBaseGlobal.initializeApp(firebaseConfig);
-                    const auth = fireBaseGlobal.auth();
-                    const db = fireBaseGlobal.firestore();
-
-                    // Add debug logging to help diagnose connectivity issues.
-                    fireBaseGlobal.firestore.setLogLevel('debug');
-
-                    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-
-                    const authAction = async () => {
-                        try {
-                            const token = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-                            if (token) {
-                                await auth.signInWithCustomToken(token);
-                            } else {
-                                await auth.signInAnonymously();
-                            }
-                        } catch (e) {
-                            console.error("Auth failed:", e);
-                        }
-                    };
-
-                    auth.onAuthStateChanged(user => {
-                        const userId = user ? user.uid : 'anon-' + crypto.randomUUID();
-                        setServices({ db, auth, userId, isReady: true, appId });
-                    });
-                    authAction();
-                } catch (error) {
-                    console.error("Firebase init failed", error);
-                    // Still mark as ready so the UI doesn't hang, but db/auth will be null
-                    setServices(s => ({ ...s, isReady: true }));
-                }
-            }, []);
-            return <FirebaseContext.Provider value={services}>{children}</FirebaseContext.Provider>;
-        }
-
-        // --- 1. Icons ---
-        const HomeIcon = () => '⌂';
-        const ShieldIcon = () => '🛡️';
-        const MapIcon = () => '🗺️';
-        const BellIcon = () => '🔔';
-        const PhoneIcon = () => '📞';
-        const SyncIcon = () => '🔄';
-        const WarningIcon = () => '⚠️';
-        const CheckIcon = () => '✅';
-        const HelpIcon = () => '🚨';
-        const SoundIcon = () => '🔊';
-        const FlashIcon = () => '⚡';
-        const SparkleIcon = () => '✨'; // NEW: Sparkle icon for Gemini features
-        const SearchIcon = () => '🔍';
-        const EditIcon = () => '📝';
-        const OnlineDot = () => <span className="inline-block w-3 h-3 rounded-full bg-accent-green mr-1"></span>; // Online status
-
-        // --- 2. UI Components ---
-        // Toast Notification component for success feedback
-        function Toast({ message, show, icon = <CheckIcon />, bgColor = 'bg-accent-green' }) {
-            return (
-                <div className={cn("toast", show && "show", bgColor)}>
-                    <div className="flex items-center gap-2">
-                        <span className="text-xl">{icon}</span>
-                        <span>{message}</span>
-                    </div>
-                </div>
-            );
-        }
-
-        const Card = ({ children, className, variant = 'light' }) => {
-            const baseClasses = "rounded-xl shadow-md";
-            const lightClasses = "bg-surface border border-secondary text-text-primary";
-            const darkClasses = "reports-card-dark border";
-
-            return (
-                <div className={cn(baseClasses, variant === 'dark' ? darkClasses : lightClasses, className)}>
-                    {children}
-                </div>
-            );
-        };
-        const Button = ({ children, onClick, disabled, className, id, type = 'button' }) => <button id={id} type={type} onClick={onClick} disabled={disabled} className={cn("px-4 py-2 rounded-lg font-semibold transition-colors shadow-lg active:scale-[0.98]", className)}>{children}</button>;
-
-        // --- Contact List Data ---
-        const emergencyContacts = {
-            critical: [
-                 // This acts as a header/divider for the critical section
-                 { type: 'header', name: 'Critical Emergency Numbers (Numero sa Kritikal nga Emerhensiya)', detail: 'These numbers work even without load balance. Use them immediately in emergencies. (Kini nga mga numero magamit bisan walay load.)' }
-            ],
-            national: [
-                { type: 'national', name: 'National Emergency Hotline', detail: 'Police, Fire, Medical Emergencies (Pulis, Bombero, Medikal)', number: '911', color: 'bg-accent-red' },
-                { type: 'national', name: 'NDRRMC Hotline', detail: 'National Disaster Risk Reduction (Pagpaminus sa Risgo sa Kalamidad)', number: '143', color: 'bg-accent-red' },
-                { type: 'national', name: 'Philippine Red Cross', detail: 'Emergency medical assistance (Ambulansya/Medikal)', number: '143', color: 'bg-accent-red' },
-                { type: 'national', name: 'PHIVOLCS Hotline', detail: 'Earthquake information and alerts (Balita sa Linog)', number: '0284261468', color: 'bg-accent-red' },
-            ],
-            local: [
-                { type: 'header', name: 'Local Emergency Services (Tibuok Cebu)', detail: 'Cebu Province and City (Probinsiya ug Siyudad)' },
-                { type: 'local', name: 'Cebu Provincial DRRM Office', detail: 'Provincial disaster coordination (Koordinasyon sa Probinsiya)', number: '0322556666', color: 'bg-primary' },
-                { type: 'local', name: 'Cebu City DRRM Office', detail: 'Cebu City disaster response (Tubag sa Kalamidad sa Siyudad)', number: '0322666666', color: 'bg-primary' },
-                { type: 'local', name: 'Cebu City Police Office', detail: 'Cebu City law enforcement (Kapulisan)', number: '0322312222', color: 'bg-primary' },
-            ]
-        };
-
-        // --- Contact List Sub-Component ---
-        function EmergencyContactList({ contacts, isNational }) {
-            return (
-                <div className="space-y-3">
-                    {contacts.map((contact, index) => {
-                        if (contact.type === 'header') {
-                            return (
-                                <div key={index} className="pt-4 pb-1">
-                                    <h3 className="font-bold text-lg reports-text-light">{contact.name}</h3>
-                                    <p className="text-xs text-gray-400">{contact.detail}</p>
-                                    <hr className="mt-2 border-gray-600" />
-                                </div>
-                            );
-                        }
-
-                        // Render Call Button Card
-                        const buttonColorClass = contact.color;
-
-                        return (
-                            // SOS FUNCTIONALITY IS HERE: The 'tel:' protocol makes the link functional for calling on mobile devices.
-                            <Card key={`${contact.number}-${index}`} variant="dark" className="p-3 shadow-md border-opacity-30">
-                                <h4 className="font-semibold reports-text-light">{contact.name}</h4>
-                                <p className="text-sm text-gray-400 mb-2">{contact.detail}</p>
-                                <a
-                                    href={`tel:${contact.number}`}
-                                    className={cn("flex items-center justify-center gap-2 p-3 rounded-lg font-bold text-white transition-transform active:scale-95", buttonColorClass,
-                                        contact.color === 'bg-accent-red' ? 'hover:bg-accent-red/80' : 'hover:bg-primary/80')}
-                                >
-                                    <PhoneIcon /> TAWAG {contact.number} (CALL)
-                                </a>
-                            </Card>
-                        );
-                    })}
-                </div>
-            );
-        }
-
-        // --- 3. Page Components ---
-        function HomePage({ bulletins, currentAlert, showToast, isSyncing, handleSync }) {
-            const [lastSync, setLastSync] = useState("Just now");
-            const chartRef = useRef(null);
-            const chartInstanceRef = useRef(null);
-
-            // Effect to handle the Chart.js Bubble Chart
-            useEffect(() => {
-                if (chartRef.current && bulletins.length > 0) {
-                    // Check if Chart is defined globally before attempting to initialize
-                    if (typeof Chart === 'undefined') {
-                        console.warn("Chart.js library is not loaded. Cannot display seismic chart.");
-                        return;
-                    }
-
-                    if (chartInstanceRef.current) {
-                        chartInstanceRef.current.destroy();
-                    }
-                    const ctx = chartRef.current.getContext('2d');
-
-                    const chartData = {
-                        datasets: bulletins.filter(b => b.magnitude !== 'N/A').map(b => ({
-                            label: b.location,
-                            data: [{
-                                x: new Date(b.date.split(' - ')[0]),
-                                y: parseFloat(b.depth),
-                                r: parseFloat(b.magnitude) * 4,
-                            }],
-                            // Dark mode compatible colors
-                            backgroundColor: b.severity === 'extreme' ? 'rgba(229, 62, 62, 0.7)' : b.severity === 'high' ? 'rgba(246, 173, 85, 0.7)' : 'rgba(66, 153, 225, 0.7)',
-                            borderColor: b.severity === 'extreme' ? '#E53E3E' : b.severity === 'high' ? '#F6AD55' : '#4299E1',
-                            borderWidth: 1,
-                        }))
-                    };
-
-                    chartInstanceRef.current = new Chart(ctx, {
-                        type: 'bubble',
-                        data: chartData,
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            scales: {
-                                x: {
-                                    type: 'time',
-                                    time: { unit: 'day' },
-                                    title: { display: true, text: 'Date of Event (Petsa)', color: '#A0AEC0' },
-                                    grid: { color: '#4A5568' }, // Dark grid lines
-                                    ticks: { color: '#E2E8F0' } // Light ticks
-                                },
-                                y: {
-                                    title: { display: true, text: 'Depth (km) (Giladmon)', color: '#A0AEC0' },
-                                    grid: { color: '#4A5568' },
-                                    ticks: { color: '#E2E8F0', reverse: true }
-                                }
-                            },
-                            plugins: {
-                                legend: { display: false },
-                                tooltip: {
-                                    callbacks: {
-                                        label: function(context) {
-                                            const d = context.raw;
-                                            return `${context.dataset.label}: Mag ${d.r/4}, Depth ${d.y} km`;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    });
-                }
-                return () => {
-                    if (chartInstanceRef.current) {
-                        chartInstanceRef.current.destroy();
-                        chartInstanceRef.current = null;
-                    }
-                };
-            }, [bulletins]);
-
-            // Function to update sync status after successful sync
-            const performSync = async () => {
-                const success = await handleSync();
-                if (success) {
-                    setLastSync(new Date().toLocaleTimeString());
-                    showToast('Sync Complete: Latest earthquake data and bulletins downloaded for offline use. (Nahuman ang Sync!)');
-                } else {
-                    showToast('Sync Failed: Check your internet connection. (Napakyas ang Sync.)', <WarningIcon/>, 'bg-accent-red');
-                }
-            }
-
-
-            return (
-                <div className="space-y-6 px-4">
-                    <div className="text-center">
-                        <h1 className="text-3xl font-extrabold text-text-primary">QuakeSafe Dashboard</h1>
-                        <p className="text-text-secondary mt-1">Situational awareness in a crisis. Easy to use, advanced information. (Sayon gamiton, apan mas gamit!) </p>
-
-                        {/* Prominent Alert Status Banner */}
-                        <div className={cn("mt-4 p-3 rounded-xl font-extrabold text-lg transition-all shadow-md", currentAlert.color)}>
-                            KASAMTANGANG STATUS: {currentAlert.level}
-                        </div>
-                    </div>
-
-                    {/* NEW Sync Status Card */}
-                    <Card className="p-4 md:p-6 space-y-3">
-                        <h2 className="text-xl font-bold text-text-primary mb-3">PHIVOLCS Data Sync (Pag-sync sa Data)</h2>
-                        <div className="flex justify-between items-center pb-2 border-b border-secondary">
-                            <h3 className="font-bold text-lg text-text-primary flex items-center gap-2"><SyncIcon /> Sync Status</h3>
-                            <p className="text-sm text-text-secondary">Katapusang na-sync: <span className="font-semibold">{lastSync}</span></p>
-                        </div>
-                        <Button onClick={performSync} disabled={isSyncing} className="w-full bg-sync-blue hover:bg-primary text-white flex items-center justify-center gap-2 shadow-lg">
-                            <SyncIcon /> {isSyncing ? 'Nagsynce...' : 'Sync Latest PHIVOLCS Data'}
-                        </Button>
-                        <p className="text-xs text-text-secondary text-center">I-tap aron i-refresh ang data para sa offline use (Kinahanglan ang internet).</p>
-                    </Card>
-
-                    <Card className="p-4 md:p-6">
-                        <h2 className="text-xl font-bold text-text-primary mb-3">Recent Seismic Activity (Bag-ong Kalihokan sa Linog)</h2>
-                        <div className="chart-container">
-                            <canvas ref={chartRef}></canvas>
-                        </div>
-                         <p className="text-xs text-text-secondary text-center mt-2">Kini nga chart nagpakita sa bag-ong mga linog pinaagi sa petsa ug giladmon. Ang gidak-on sa bubble mao ang magnitude.</p>
-                    </Card>
-
-                    <div>
-                        <h2 className="text-xl font-bold text-text-primary mb-3">Latest Bulletins (Ulahing Balita)</h2>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {bulletins.map((b, i) => (
-                                <Card key={i} className={cn("p-4",
-                                    // Adjusted colors for dark mode context
-                                    b.severity === 'extreme' && "bg-accent-red/20 border-accent-red",
-                                    b.severity === 'high' && "bg-accent-orange/20 border-accent-orange",
-                                    b.severity === 'moderate' && "bg-primary/20 border-primary"
-                                )}>
-                                    <p className="font-mono text-xs text-text-secondary">{b.number}</p>
-                                    <h3 className="font-bold text-text-primary">{b.location}</h3>
-                                    <p className="text-sm mt-1">Mag <span className="font-extrabold">{b.magnitude}</span> sa <span className="font-extrabold">{b.depth}</span> giladmon</p>
-                                    <p className="text-xs text-text-secondary mt-2">{b.date}</p>
-                                </Card>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            );
-        }
-
-        function SafetyPage({ showToast }) {
-            const [content, setContent] = useState('');
-            const [isLoading, setIsLoading] = useState(false);
-            const [topic, setTopic] = useState('');
-            const [searchTerm, setSearchTerm] = useState(''); // NEW: State for search term
-            const [isSearchLoading, setIsSearchLoading] = useState(false); // NEW: Loading state for search
-
-            const topics = {
-                'Kit': 'Generate a detailed checklist for an earthquake survival kit for a Filipino family. (Detalyadong Kit sa Linog)',
-                'During': 'What are the exact steps to take during a strong earthquake inside a building? (Unsay Buhaton Atol sa Linog)',
-                'After': 'List the immediate safety checks and actions after an earthquake has stopped. (Unsay Buhaton Pagkahuman sa Linog)'
-            };
-
-            const getAdvice = useCallback(async (selectedTopic) => {
-                if (!selectedTopic) return;
-                setIsLoading(true);
-                setContent('');
-                setTopic(selectedTopic);
-                setSearchTerm(''); // Clear search term when switching tabs
-
-                const systemPrompt = "You are a disaster preparedness expert. Provide clear, concise, actionable advice in Markdown format. Use headings and lists. Write in a mix of English and simple Cebuano (Bisaya) terms for clarity.";
-                try {
-                    const payload = { contents: [{ parts: [{ text: topics[selectedTopic] }] }], systemInstruction: { parts: [{ text: systemPrompt }] } };
-                    const result = await callApiWithRetry(payload);
-                    setContent(result.candidates[0].content.parts[0].text);
-                } catch (e) {
-                    setContent("Error fetching safety advice. Please check your connection. (Sayop sa pagkuha sa advice.)");
-                } finally {
-                    setIsLoading(false);
-                }
-            }, []);
-
-            // NEW: Gemini API Search for Definitions/Explanations
-            const handleSearch = async (e) => {
-                e.preventDefault();
-                if (!searchTerm.trim()) return;
-
-                setIsSearchLoading(true);
-                setContent('');
-                setTopic('Search');
-
-                const systemPrompt = "You are a scientific explainer. Explain the geological term or disaster concept the user searches for. Use simple language and include relevant examples for the Philippines if possible. Respond in a single paragraph or a short bulleted list.";
-                const userQuery = `Define and explain: ${searchTerm}. Use Google Search data for accuracy.`;
-
-                try {
-                    const payload = { contents: [{ parts: [{ text: userQuery }] }], systemInstruction: { parts: [{ text: systemPrompt }] } };
-                    // Use Grounding to get up-to-date and accurate information
-                    const result = await callApiWithRetry(payload, true);
-
-                    let text = result.candidates[0].content.parts[0].text;
-                    let sources = [];
-                    const groundingMetadata = result.candidates[0].groundingMetadata;
-
-                    if (groundingMetadata && groundingMetadata.groundingAttributions) {
-                        sources = groundingMetadata.groundingAttributions.map(attr => ({
-                            uri: attr.web?.uri,
-                            title: attr.web?.title,
-                        })).filter(s => s.uri);
-                    }
-
-                    // Format output with citations
-                    let formattedContent = `<div class="text-text-primary text-xl font-extrabold mb-3">Definition: ${searchTerm}</div>`;
-                    formattedContent += `<p class="text-text-primary prose">${text}</p>`;
-
-                    if (sources.length > 0) {
-                        formattedContent += `<h3 class="font-bold text-sm mt-4 text-text-secondary">Sources (Mga Gigikanan):</h3>`;
-                        formattedContent += `<ul class="list-disc ml-5 text-xs text-gray-500 space-y-1">`;
-                        sources.slice(0, 3).forEach((s, i) => {
-                            formattedContent += `<li><a href="${s.uri}" target="_blank" class="text-primary hover:underline">${s.title || s.uri}</a></li>`;
-                        });
-                        formattedContent += `</ul>`;
-                    }
-
-                    setContent(formattedContent);
-                    showToast(`Search for '${searchTerm}' complete! (Nahuman na ang pagpangita!)`);
-                } catch (e) {
-                    setContent(`Error fetching definition for '${searchTerm}'. (Sayop sa pagpangita sa kahulugan.)`);
-                    showToast('Search Failed: Check your connection.', <WarningIcon/>, 'bg-accent-red');
-                } finally {
-                    setIsSearchLoading(false);
-                }
-            };
-
-
-            useEffect(() => { getAdvice('Kit'); }, [getAdvice]);
-
-            return (
-                <div className="space-y-6 px-4">
-                     <div className="text-center">
-                        <h1 className="text-3xl font-extrabold text-text-primary">Safety & Preparedness (Kaluwasan ug Pagpangandam)</h1>
-                        <p className="text-text-secondary mt-1">This section provides proactive, life-saving information. (Kini nga seksyon naghatag og impormasyon alang sa kaluwasan.)</p>
-                    </div>
-
-                    {/* Gemini Search Input (NEW FEATURE) */}
-                    <Card className="p-4 bg-surface/80 border-2 border-primary shadow-lg">
-                         <h2 className="text-xl font-bold text-text-primary mb-3 flex items-center gap-2"><SparkleIcon /> Detailed Explanations</h2>
-                         <p className="text-sm text-text-secondary mb-3">Find definitions or explanations for disaster terms (e.g., *liquefaction*, *tsunami*, *fault line*). (Pangitaa ang kahulugan sa mga termino.)</p>
-                        <form onSubmit={handleSearch} className="flex gap-2">
-                            <input
-                                value={searchTerm}
-                                onChange={e => setSearchTerm(e.target.value)}
-                                placeholder="Pangitaa ang Termino, e.g., 'liquefaction'"
-                                className="w-full px-3 py-2 border border-secondary rounded-lg bg-background text-text-primary"
-                            />
-                            <Button type="submit" disabled={isSearchLoading} className="bg-primary text-white hover:bg-primary/80 flex-shrink-0">
-                                <SearchIcon /> {isSearchLoading ? '...' : 'Pangita'}
-                            </Button>
-                        </form>
-                    </Card>
-
-                    <Card className="p-4 flex justify-center gap-2 bg-surface">
-                        {Object.keys(topics).map(t => (
-                            <Button key={t} onClick={() => getAdvice(t)} disabled={isLoading || isSearchLoading || topic === t}
-                                className={cn(
-                                    topic === t && topic !== 'Search' ? "bg-primary text-white" : "bg-secondary/50 text-text-primary",
-                                    "hover:bg-primary/80 hover:text-white"
-                                )}
-                            >
-                                {t}
-                            </Button>
-                        ))}
-                    </Card>
-                    <Card className="p-4 md:p-6 min-h-[300px] bg-surface">
-                        {isLoading || isSearchLoading ? <p className="text-text-secondary">Naghimo og advice/definition... (Generating advice/definition...)</p> :
-                            // Using dangerouslySetInnerHTML to render basic Markdown, which is expected from the API
-                            <div className="prose" dangerouslySetInnerHTML={{ __html: content.replace(/\n/g, '<br />').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/##\s(.*?)/g, '<h3>$1</h3>') }}></div>
-                        }
-                    </Card>
-                </div>
-            );
-        }
-
-        function MapsPage({ showToast }) {
-            const { db, userId, appId, isReady } = useFirebase();
-
-            // Hazard Search States
-            const [query, setQuery] = useState('');
-            const [result, setResult] = useState(null);
-            const [isLoading, setIsLoading] = useState(false);
-
-            // Request Help States
-            const [helpForm, setHelpForm] = useState({ items: '', people: '', notes: '', contact: '' });
-            const [isRequesting, setIsRequesting] = useState(false);
-
-            // Rescuer Alert States
-            const audioContextRef = useRef(null);
-            const oscillatorRef = useRef(null);
-            const gainNodeRef = useRef(null);
-            const flashIntervalRef = useRef(null);
-
-            const [isSounding, setIsSounding] = useState(false);
-            const [isFlashing, setIsFlashing] = useState(false);
-            const [flashColor, setFlashColor] = useState('bg-yellow-400'); // For visual feedback
-
-            const startSoundAlert = () => {
-                if (isSounding) {
-                    stopSoundAlert();
-                    return;
-                }
-
-                // Initialize AudioContext if not already done
-                if (!audioContextRef.current) {
-                    audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
-                }
-                const context = audioContextRef.current;
-
-                // Create an oscillator (sound source)
-                const oscillator = context.createOscillator();
-                oscillator.type = 'sawtooth'; // Piercing sound
-                oscillator.frequency.setValueAtTime(800, context.currentTime);
-
-                // Create gain node (volume control)
-                const gainNode = context.createGain();
-                gainNode.gain.setValueAtTime(0, context.currentTime);
-                // Ramp up volume quickly for immediate sound
-                gainNode.gain.linearRampToValueAtTime(0.5, context.currentTime + 0.05);
-
-                // Connect nodes
-                oscillator.connect(gainNode);
-                gainNode.connect(context.destination);
-
-                // Start the sound and store references
-                oscillator.start();
-                oscillatorRef.current = oscillator;
-                gainNodeRef.current = gainNode;
-                setIsSounding(true);
-            };
-
-            const stopSoundAlert = () => {
-                const oscillator = oscillatorRef.current;
-                const gainNode = gainNodeRef.current;
-
-                // Check if the oscillator or gain node is currently active
-                if (oscillator && gainNode) {
-                    try {
-                        const context = audioContextRef.current;
-                        const now = context.currentTime;
-                        const gainParam = gainNode.gain;
-
-                        // FIX: Explicitly check that the gain AudioParam exists before trying to ramp its value.
-                        if (gainParam) {
-                            // Smoothly fade out the sound
-                            gainParam.linearRampToValueAtTime(gainParam.value, now); // Set starting point
-                            gainParam.linearRampToValueAtTime(0, now + 0.15); // Ramp to 0 over 150ms
-                        } else {
-                            // Fallback if gain property is somehow missing
-                            console.warn("Gain property missing on GainNode. Stopping immediately without fade.");
-                        }
-
-                        // Stop the oscillator after the fade out period
-                        setTimeout(() => {
-                            // Check the refs again inside the timeout in case the component unmounted or state changed quickly
-                            if (oscillatorRef.current) {
-                                oscillatorRef.current.stop();
-                                // Ensure disconnect is called before clearing references
-                                oscillatorRef.current.disconnect();
-                                if (gainNodeRef.current) {
-                                    gainNodeRef.current.disconnect();
-                                }
-                                oscillatorRef.current = null;
-                                gainNodeRef.current = null;
-                            }
-                        }, 200); // Wait slightly longer than fade time
-
-                    } catch (e) {
-                        console.error("Error stopping oscillator (smooth stop failed):", e);
-                         // Fallback stop
-                        if (oscillatorRef.current) {
-                            try {
-                                oscillatorRef.current.stop();
-                            } catch (stopErr) {
-                                console.error("Hard stop failed:", stopErr);
-                            }
-                            oscillatorRef.current = null;
-                            gainNodeRef.current = null;
-                        }
-                    }
-                }
-                setIsSounding(false);
-            };
-
-            const startFlashAlert = () => {
-                if (isFlashing) {
-                    stopFlashAlert();
-                    return;
-                }
-
-                // Toggle color every 100ms (10 flashes per second)
-                flashIntervalRef.current = setInterval(() => {
-                    setFlashColor(prev => prev === 'bg-yellow-400' ? 'bg-accent-red' : 'bg-yellow-400');
-                }, 100);
-
-                setIsFlashing(true);
-            };
-
-            const stopFlashAlert = () => {
-                if (flashIntervalRef.current) {
-                    clearInterval(flashIntervalRef.current);
-                    flashIntervalRef.current = null;
-                }
-                setIsFlashing(false);
-                setFlashColor('bg-yellow-400'); // Reset color
-            };
-
-            // Cleanup effect to stop alerts when component unmounts or alerts are toggled off
-            useEffect(() => {
-                return () => {
-                    stopSoundAlert();
-                    stopFlashAlert();
-                };
-            }, []); // Empty dependency array ensures this runs only on unmount
-
-            const handleSearch = async (e) => {
-                e.preventDefault();
-                setIsLoading(true);
-                setResult(null);
-                const systemPrompt = "As a geologist, summarize search results for fault lines near the user's location in the Philippines. Explain the findings clearly in a short paragraph.";
-                const payload = { contents: [{ parts: [{ text: `Find active fault lines and seismic hazard zones near ${query}, Philippines` }] }], systemInstruction: { parts: [{ text: systemPrompt }] } };
-                try {
-                    // Using Grounding for the map/hazard search tool
-                    const res = await callApiWithRetry(payload, true);
-                    setResult(res.candidates[0].content.parts[0].text);
-                    showToast('Hazard search complete! (Nahuman ang pagpangita sa peligro!)');
-                } catch (e) {
-                    setResult("Could not fetch hazard data. (Dili makuha ang data sa peligro.)");
-                    showToast('Search Failed: Check your connection.', <WarningIcon/>, 'bg-accent-red');
-                } finally {
-                    setIsLoading(false);
-                }
-            };
-
-            // Request Help Logic
-            const handleHelpRequest = async (e) => {
-                e.preventDefault();
-                if (!isReady || !db || !helpForm.items.trim() || !helpForm.people.trim() || !helpForm.contact.trim()) {
-                    showToast('Please fill out all required fields. (Palihug kompletoha ang tanan.)', <WarningIcon/>, 'bg-accent-red');
-                    return;
-                }
-
-                setIsRequesting(true);
-                // Ensure firebase is checked before accessing firestore field value
-                const fireBaseGlobal = window.firebase;
-                if (!fireBaseGlobal) {
-                    showToast('Database not connected. Please try again. (Walay koneksyon sa Database.)', <WarningIcon/>, 'bg-accent-red');
-                    setIsRequesting(false);
-                    return;
-                }
-
-                const requestsRef = db.collection(`artifacts/${appId}/public/data/help_requests`);
-
-                const requestData = {
-                    ...helpForm,
-                    location: 'Unknown (User GPS Needed)', // Placeholder, a real app would use navigator.geolocation
-                    urgency: 'Medium', // Default urgency for form requests
-                    status: 'Pending',
-                    userId,
-                    timestamp: fireBaseGlobal.firestore.FieldValue.serverTimestamp()
-                };
-
-                try {
-                    await requestsRef.add(requestData);
-                    setHelpForm({ items: '', people: '', notes: '', contact: '' });
-                    showToast('Help Request Sent! Responders have been notified. (Gipadala na ang Pangayo og Tabang!)', <CheckIcon/>);
-                } catch (error) {
-                    console.error("Error submitting help request: ", error);
-                    showToast('Failed to send request. Try again. (Napakyas sa pagpadala.)', <WarningIcon/>, 'bg-accent-red');
-                } finally {
-                    setIsRequesting(false);
-                }
-            };
-
-            const handleChange = (e) => {
-                const { name, value } = e.target;
-                setHelpForm(prev => ({ ...prev, [name]: value }));
-            };
-
-
-            return (
-                <div className="space-y-6 px-4">
-                     {/* Flash Alert Overlay - Renders only when active */}
-                    {isFlashing && (
-                        <div className={cn("flash-overlay", flashColor)}></div>
-                    )}
-
-                    <div className="text-center">
-                        <h1 className="text-3xl font-extrabold text-text-primary">Hazard Tools & Help (Mga Gamit sa Peligro ug Tabang)</h1>
-                        <p className="text-text-secondary mt-1">Gamita kining mga advanced tool aron masabtan ang risgo sa inyong lugar ug makigkomunikar dayon.</p>
-                    </div>
-
-                    {/* Rescuer Alert Section */}
-                    <Card className="p-4 md:p-6 bg-surface border-2 border-primary shadow-lg">
-                        <h2 className="text-xl font-bold text-text-primary mb-4 flex items-center gap-2"><SoundIcon /> Signal for Rescuers (Signal sa Mga Tigluwas)</h2>
-                        <p className="text-sm text-text-secondary mb-4">Use these high-visibility and high-volume alerts to signal your exact location. (Gamita kini aron ipahibalo ang imong location.)</p>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <Button
-                                onClick={startSoundAlert}
-                                className={cn("text-white text-lg font-extrabold shadow-xl transition-transform active:scale-95", isSounding ? "bg-accent-red hover:bg-accent-red/80" : "bg-primary hover:bg-primary/80")}
-                            >
-                                <SoundIcon /> {isSounding ? 'Stop Sound (Hunong)' : 'Start Sound (Sugdi)'}
-                            </Button>
-                            <Button
-                                onClick={startFlashAlert}
-                                className={cn("text-white text-lg font-extrabold shadow-xl transition-transform active:scale-95", isFlashing ? "bg-accent-red hover:bg-accent-red/80" : "bg-accent-red hover:bg-accent-red/80")}
-                            >
-                                <FlashIcon /> {isFlashing ? 'Stop Flash (Hunong)' : 'Start Flash (Sugdi)'}
-                            </Button>
-                        </div>
-                        <p className="text-xs text-text-secondary text-center mt-3">I-tap pag-usab aron hunungon ang signal.</p>
-                    </Card>
-
-
-                    {/* Request Help Section */}
-                    <Card className="p-4 md:p-6 bg-surface/80 border-2 border-help-red shadow-lg">
-                        <h2 className="text-xl font-bold text-text-primary mb-4 flex items-center gap-2"><HelpIcon /> Request Emergency Help (Pangayo og Tabang)</h2>
-                        <form onSubmit={handleHelpRequest} className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-text-primary mb-1">Items Needed (e.g., Water, Food, Medical):</label>
-                                <input name="items" value={helpForm.items} onChange={handleChange} required placeholder="Panginahanglan (e.g., Tubig, Pagkaon)" className="w-full px-3 py-2 border border-secondary rounded-lg bg-background text-text-primary" />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-text-primary mb-1">Number of People (Pila ka Tawo):</label>
-                                <input name="people" type="number" value={helpForm.people} onChange={handleChange} required placeholder="Pila ka tawo" className="w-full px-3 py-2 border border-secondary rounded-lg bg-background text-text-primary" />
-                            </div>
-                             <div>
-                                <label className="block text-sm font-medium text-text-primary mb-1">Contact Number (Numero sa Kontak):</label>
-                                <input name="contact" type="tel" value={helpForm.contact} onChange={handleChange} required placeholder="Inyong Contact Number" className="w-full px-3 py-2 border border-secondary rounded-lg bg-background text-text-primary" />
-                            </div>
-                             <div>
-                                <label className="block text-sm font-medium text-text-primary mb-1">Notes / Current Situation (Optional):</label>
-                                <textarea name="notes" value={helpForm.notes} onChange={handleChange} placeholder="Dugang impormasyon" rows="2" className="w-full p-3 border border-secondary rounded-lg bg-background text-text-primary"></textarea>
-                            </div>
-
-                            <Button type="submit" disabled={isRequesting || !isReady} className="w-full bg-help-red hover:bg-help-red-hover text-white flex items-center justify-center gap-2 text-lg font-extrabold shadow-xl transition-transform active:scale-95">
-                                <WarningIcon /> {isRequesting ? 'Napadala ang Pangayo og Tabang...' : 'Request Help (Pangayo og Tabang)'}
-                            </Button>
-                        </form>
-                        <p className="text-xs text-text-secondary text-center mt-3">Ang imong hangyo ipadala sa mga tigluwas.</p>
-                    </Card>
-
-                    {/* Local Hazard Search */}
-                    <Card className="p-4 md:p-6 bg-surface">
-                        <h2 className="text-xl font-bold text-text-primary mb-3">Local Hazard Search (Pagpangita sa Lokal nga Peligro)</h2>
-                        <form onSubmit={handleSearch} className="flex gap-2">
-                            <input value={query} onChange={e => setQuery(e.target.value)} placeholder="e.g., Cebu City" className="w-full px-3 py-2 border border-secondary rounded-lg bg-background text-text-primary" />
-                            <Button type="submit" disabled={isLoading} className="bg-primary text-white hover:bg-primary/80 flex-shrink-0">{isLoading ? '...' : 'Pangita (Search)'}</Button>
-                        </form>
-                        {result && <p className="mt-4 text-text-primary">{result}</p>}
-                    </Card>
-
-                </div>
-            );
-        }
-
-        // --- Reports Page (Updated to match SOS & Contacts image) ---
-        function ReportsPage({ showToast }) {
-            const { db, userId, appId, isReady } = useFirebase();
-            const [reports, setReports] = useState([]);
-            const [description, setDescription] = useState('');
-            const [isSubmitting, setIsSubmitting] = useState(false);
-            const [summary, setSummary] = useState(''); // NEW: State for the AI summary
-            const [isSummarizing, setIsSummarizing] = useState(false); // NEW: State for loading summary
-
-            useEffect(() => {
-                if (!isReady || !db) return;
-                const reportsRef = db.collection(`artifacts/${appId}/public/data/community_reports`);
-
-                const fireBaseGlobal = window.firebase;
-                if (!fireBaseGlobal) {
-                    console.error("Firebase is not initialized for fetching reports.");
-                    return;
-                }
-
-                // Fetch reports and subscribe to real-time updates
-                const unsubscribe = reportsRef.limit(20).onSnapshot(snapshot => {
-                    const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    // Client-side sorting by timestamp (descending)
-                    data.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
-                    setReports(data);
-                });
-                return () => unsubscribe();
-            }, [isReady, db, appId]);
-
-            const handleSubmit = async (e) => {
-                e.preventDefault();
-                if (!description.trim() || !isReady || !db) return;
-
-                const fireBaseGlobal = window.firebase;
-                if (!fireBaseGlobal) {
-                    console.error("Firebase is not initialized for submitting reports.");
-                    return;
-                }
-
-                setIsSubmitting(true);
-                const reportsRef = db.collection(`artifacts/${appId}/public/data/community_reports`);
-                try {
-                    await reportsRef.add({
-                        description,
-                        userId,
-                        timestamp: fireBaseGlobal.firestore.FieldValue.serverTimestamp()
-                    });
-                    setDescription('');
-                    showToast('Report Submitted! (Gipadala ang Balita!)', <CheckIcon/>);
-                } catch (error) {
-                    console.error("Error submitting report: ", error);
-                    showToast('Failed to submit report. (Napakyas sa pagpadala.)', <WarningIcon/>, 'bg-accent-red');
-                } finally {
-                    setIsSubmitting(false);
-                }
-            };
-
-            // NEW: Gemini API Report Summarization
-            const handleSummarize = async () => {
-                if (reports.length === 0) {
-                    showToast('No reports to summarize. (Walay balita nga i-summarize.)', <WarningIcon/>, 'bg-accent-orange');
-                    return;
-                }
-
-                setIsSummarizing(true);
-                setSummary('');
-
-                // Format all reports into a single prompt string
-                const reportText = reports.map(r =>
-                    `[User ${r.userId.substring(0, 6)} at ${r.timestamp?.toDate().toLocaleTimeString() || 'time unknown'}]: ${r.description}`
-                ).join('\n---\n');
-
-                const systemPrompt = "You are a crisis manager. Summarize the following community reports into a single, short, and actionable paragraph for first responders. Highlight the most urgent and common issues (e.g., power, road blockages, injuries). Respond in English.";
-                const userQuery = `Summarize the following 20 recent community reports:\n\n${reportText}`;
-
-                try {
-                    const payload = { contents: [{ parts: [{ text: userQuery }] }], systemInstruction: { parts: [{ text: systemPrompt }] } };
-                    const result = await callApiWithRetry(payload);
-                    setSummary(result.candidates[0].content.parts[0].text);
-                    showToast('Summary Generated! (Nahimo na ang Summary!)');
-                } catch (e) {
-                    setSummary("Could not generate summary. Check API connection. (Dili makahimo og summary.)");
-                    showToast('Summarization Failed: Check your connection.', <WarningIcon/>, 'bg-accent-red');
-                } finally {
-                    setIsSummarizing(false);
-                }
-            };
-
-
-            return (
-                 // Outer container for dark mode look (Ensures consistency with body background)
-                 <div className="reports-dark-bg min-h-screen">
-                     <div className="space-y-6 px-4 pt-6 pb-20">
-                         <div className="text-center">
-                            <h1 className="text-3xl font-extrabold reports-text-light">Emergency SOS & Contacts (Emerhensiya ug Kontak)</h1>
-                            <p className="text-gray-400 mt-1">One-tap emergency hotlines and important contacts. Available Offline.</p>
-                        </div>
-
-                        {/* Emergency Contact List Section */}
-                        <EmergencyContactList contacts={emergencyContacts.critical} />
-                        <EmergencyContactList contacts={emergencyContacts.national} isNational={true} />
-                        <EmergencyContactList contacts={emergencyContacts.local} isNational={false} />
-
-                        {/* Community Report Submission Section */}
-                        <div className="pt-4">
-                             <h2 className="text-xl font-bold reports-text-light mb-3">Community Report (Pagsumite og Balita)</h2>
-                             <Card variant="dark" className="p-4 md:p-6 shadow-xl bg-surface">
-                                <form onSubmit={handleSubmit} className="space-y-3">
-                                    <p className="text-sm text-gray-400 mb-2">Ipadala ang inyong balita aron makatabang sa komunidad ug first responders.</p>
-                                    <textarea
-                                        value={description}
-                                        onChange={e => setDescription(e.target.value)}
-                                        placeholder="Pananglitan: 'Nawala ang koryente sa Cogon, guba ang dalan...'"
-                                        rows="3"
-                                        className="w-full p-3 border border-secondary rounded-lg bg-background text-text-primary placeholder-gray-500"
-                                    ></textarea>
-                                    <Button
-                                        type="submit"
-                                        disabled={isSubmitting || !isReady}
-                                        className="w-full bg-primary hover:bg-primary/80 text-white shadow"
-                                    >
-                                        <EditIcon /> {isSubmitting ? 'Nagpadala...' : 'Ipadala ang Balita'}
-                                    </Button>
-                                </form>
-                            </Card>
-                        </div>
-
-                        {/* Summary Section (NEW FEATURE) */}
-                         <div className="pt-4">
-                             <h2 className="text-xl font-bold reports-text-light mb-3 flex items-center gap-2"><SparkleIcon /> Summarize Reports</h2>
-                             <Card variant="dark" className="p-4 md:p-6 shadow-xl bg-surface/80">
-                                 <p className="text-sm text-gray-400 mb-3">Kini nga AI mo-summarize sa tanang bag-ong reports para sa dali nga pagtan-aw sa sitwasyon.</p>
-                                 <Button
-                                     onClick={handleSummarize}
-                                     disabled={isSummarizing || reports.length === 0}
-                                     className="w-full bg-primary hover:bg-primary/80 text-white shadow mb-4"
-                                 >
-                                    <SparkleIcon /> {isSummarizing ? 'Naghimo og Summary...' : `Summarize ${reports.length} Recent Reports`}
-                                </Button>
-
-                                {summary && (
-                                    <div className="mt-4 p-3 bg-background border border-primary rounded-lg">
-                                        <h3 className="font-bold text-text-primary mb-1">AI Situation Summary:</h3>
-                                        <p className="text-sm text-text-secondary">{summary}</p>
-                                    </div>
-                                )}
-                            </Card>
-                         </div>
-
-
-                         {/* Live Community Feed Section */}
-                         <div className="space-y-4">
-                            <h2 className="text-xl font-bold reports-text-light">Live Community Feed (Mga Balita Gikan sa Komunidad)</h2>
-                            {reports.length > 0 ? reports.map(r => (
-                                <Card key={r.id} variant="dark" className={cn("p-4 bg-surface", r.userId === userId && "border-2 border-primary")}>
-                                    <p className="reports-text-light font-medium">{r.description}</p>
-                                    <p className="text-xs text-gray-500 mt-2">
-                                        Gi-report ni: <span className="font-mono">{r.userId.substring(0,6)}...</span> {r.timestamp?.toDate().toLocaleDateString()} at {r.timestamp?.toDate().toLocaleTimeString()}
-                                    </p>
-                                </Card>
-                            )) : <p className="text-gray-500 text-center py-4">Wala pay reports.</p>}
-                        </div>
-                    </div>
-                 </div>
-            );
-        }
-
-        // --- 4. Main App Component ---
-        function App() {
-            const [currentPage, setCurrentPage] = useState('home'); // Set initial page back to home
-            const [isSyncing, setIsSyncing] = useState(false);
-            const [toast, setToast] = useState({ message: '', show: false, icon: <CheckIcon/>, bgColor: 'bg-accent-green' });
-            const { isReady } = useFirebase();
-
-            // Mock Data for Bulletins
-            const bulletins = [
-                { number: "PHIVOLCS EQ #2025-426", date: "10 October 2025 - 09:43 AM", severity: "extreme", magnitude: "7.6", depth: "10 km", location: "Manay (Davao Oriental)"},
-                { number: "PHIVOLCS EQ #2025-425", date: "03 October 2025 - 02:35 PM", severity: "high", magnitude: "5.2", depth: "12 km", location: "Bogo City, Cebu"},
-                { number: "PHIVOLCS EQ #2025-422", date: "01 October 2025 - 06:18 AM", severity: "moderate", magnitude: "5.8", depth: "25 km", location: "Surigao Del Sur"},
-                { number: "PHIVOLCS EQ #2025-420", date: "28 September 2025 - 11:00 PM", severity: "low", magnitude: "4.1", depth: "30 km", location: "Leyte"}
-            ];
-
-            const currentAlert = (() => {
-                const maxSeverity = Math.max(...bulletins.map(b =>
-                    b.severity === 'extreme' ? 3 : b.severity === 'high' ? 2 : b.severity === 'moderate' ? 1 : 0
-                ));
-
-                switch (maxSeverity) {
-                    case 3: return { level: "CRITICAL ALERT (Kritikal)", color: "bg-accent-red text-white" };
-                    case 2: return { level: "HIGH ALERT (Taas nga Alerto)", color: "bg-accent-orange text-background" };
-                    case 1: return { level: "MODERATE ALERT (Kasarangan)", color: "bg-primary text-white" };
-                    default: return { level: "NORMAL OPERATION (Normal)", color: "bg-accent-green text-white" };
-                }
-            })();
-
-            const showToast = (message, icon = <CheckIcon />, bgColor = 'bg-accent-green') => {
-                setToast({ message, show: true, icon, bgColor });
-                setTimeout(() => {
-                    setToast(prev => ({ ...prev, show: false }));
-                }, 3000);
-            };
-
-            const handleSync = async () => {
-                setIsSyncing(true);
-                // Simulate network delay and data fetching. In a real app, this would fetch from a PHIVOLCS API.
-                await new Promise(res => setTimeout(res, 2000));
-                setIsSyncing(false);
-                // For demonstration, we assume successful "sync"
-                return true;
-            };
-
-
-            const renderPage = () => {
-                if (!isReady) {
-                    return (
-                        <div className="flex flex-col items-center justify-center min-h-screen text-center p-4">
-                            <h1 className="text-3xl font-extrabold text-primary">Loading QuakeSafe...</h1>
-                            <p className="text-text-secondary mt-2">Connecting to Firebase and securing your session. (Nagloding... Palihug paghulat.)</p>
-                            <p className="text-xs text-gray-500 mt-10">
-                                User ID: {typeof __initial_auth_token !== 'undefined' ? 'Authenticated' : 'Anonymous'}<br/>
-                                App ID: {typeof __app_id !== 'undefined' ? __app_id : 'default-app-id'}
-                            </p>
-                        </div>
-                    );
-                }
-                switch (currentPage) {
-                    case 'home': return <HomePage bulletins={bulletins} currentAlert={currentAlert} showToast={showToast} isSyncing={isSyncing} handleSync={handleSync} />;
-                    case 'safety': return <SafetyPage showToast={showToast} />;
-                    case 'maps': return <MapsPage showToast={showToast} />;
-                    case 'reports': return <ReportsPage showToast={showToast} />;
-                    default: return <HomePage bulletins={bulletins} currentAlert={currentAlert} showToast={showToast} isSyncing={isSyncing} handleSync={handleSync} />;
-                }
-            };
-
-            const navItems = [
-                { name: 'Home', page: 'home', icon: HomeIcon },
-                { name: 'Kaluwasan', page: 'safety', icon: ShieldIcon },
-                { name: 'Mga Gamit', page: 'maps', icon: MapIcon },
-                { name: 'SOS/Kontak', page: 'reports', icon: BellIcon },
-            ];
-
-            return (
-                <div className="pb-20 min-h-screen">
-                    {renderPage()}
-
-                    {/* Floating Toast Notification */}
-                    <Toast message={toast.message} show={toast.show} icon={toast.icon} bgColor={toast.bgColor} />
-
-                    {/* Fixed Bottom Navigation Bar */}
-                    <nav className="fixed bottom-0 left-0 right-0 bg-surface border-t border-secondary shadow-2xl z-40">
-                        <div className="flex justify-around max-w-xl mx-auto">
-                            {navItems.map(item => (
-                                <button
-                                    key={item.page}
-                                    onClick={() => setCurrentPage(item.page)}
-                                    className={cn(
-                                        "flex flex-col items-center justify-center p-3 text-xs font-medium transition-colors w-full",
-                                        currentPage === item.page ? "text-primary border-t-2 border-primary pt-2" : "text-text-secondary hover:text-primary"
-                                    )}
-                                >
-                                    <item.icon />
-                                    <span className="mt-1">{item.name}</span>
-                                </button>
-                            ))}
-                        </div>
-                    </nav>
-                </div>
-            );
-        }
-
-        // --- Render Application ---
-        ReactDOM.createRoot(document.getElementById('root')).render(
-            <FirebaseProvider>
-                <App />
-            </FirebaseProvider>
-        );
-    </script>
-</body>
-</html>
+
+    <div id="root"></div>
+
+
+
+    <script type="text/babel">
+
+        const { useState, createContext, useContext, useEffect, useCallback, useRef } = React;
+
+
+
+        // --- 0. API & Firebase Configuration ---
+
+        const API_KEY = ""; 
+
+        const API_MODEL = "gemini-2.5-flash-preview-05-20";
+
+        const cn = (...classes) => classes.filter(Boolean).join(' ');
+
+
+
+        async function callApiWithRetry(payload, useGrounding = false) {
+
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${API_MODEL}:generateContent?key=${API_KEY}`;
+
+            if (useGrounding) {
+
+                payload.tools = [{ "google_search": {} }];
+
+            }
+
+            for (let i = 0; i < 3; i++) {
+
+                try {
+
+                    const response = await fetch(apiUrl, {
+
+                        method: 'POST',
+
+                        headers: { 'Content-Type': 'application/json' },
+
+                        body: JSON.stringify(payload)
+
+                    });
+
+                    if (!response.ok) throw new Error(`API Error: ${response.status}`);
+
+                    return await response.json();
+
+                } catch (error) {
+
+                    if (i === 2) throw error;
+
+                    await new Promise(res => setTimeout(res, 1000 * Math.pow(2, i)));
+
+                }
+
+            }
+
+        }
+
+
+
+        const FirebaseContext = createContext(null);
+
+        const useFirebase = () => useContext(FirebaseContext);
+
+
+
+        function FirebaseProvider({ children }) {
+
+            const [services, setServices] = useState({ db: null, auth: null, userId: null, isReady: false, appId: 'default' });
+
+            useEffect(() => {
+
+                try {
+
+                    // FIX 2.1: Check if the global 'firebase' object is loaded before proceeding
+
+                    if (typeof firebase === 'undefined' || typeof firebase.initializeApp === 'undefined') {
+
+                        throw new Error("Firebase SDK is not loaded. Please check script tags.");
+
+                    }
+
+                    
+
+                    const fireBaseGlobal = window.firebase;
+
+
+
+                    const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+
+                    const app = fireBaseGlobal.initializeApp(firebaseConfig);
+
+                    const auth = fireBaseGlobal.auth();
+
+                    const db = fireBaseGlobal.firestore();
+
+                    
+
+                    // FIX: Add debug logging to help diagnose connectivity issues.
+
+                    fireBaseGlobal.firestore.setLogLevel('debug');
+
+                    
+
+                    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+
+
+                    const authAction = async () => {
+
+                        try {
+
+                            const token = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+                            if (token) {
+
+                                await auth.signInWithCustomToken(token);
+
+                            } else {
+
+                                await auth.signInAnonymously();
+
+                            }
+
+                        } catch (e) {
+
+                            console.error("Auth failed:", e);
+
+                        }
+
+                    };
+
+
+
+                    auth.onAuthStateChanged(user => {
+
+                        const userId = user ? user.uid : 'anon-' + crypto.randomUUID();
+
+                        setServices({ db, auth, userId, isReady: true, appId });
+
+                    });
+
+                    authAction();
+
+                } catch (error) {
+
+                    console.error("Firebase init failed", error);
+
+                    // Still mark as ready so the UI doesn't hang, but db/auth will be null
+
+                    setServices(s => ({ ...s, isReady: true })); 
+
+                }
+
+            }, []);
+
+            return <FirebaseContext.Provider value={services}>{children}</FirebaseContext.Provider>;
+
+        }
+
+
+
+        // --- 1. Icons ---
+
+        const HomeIcon = () => '⌂';
+
+        const ShieldIcon = () => '🛡️';
+
+        const MapIcon = () => '🗺️';
+
+        const BellIcon = () => '🔔';
+
+        const PhoneIcon = () => '📞'; 
+
+        const SyncIcon = () => '🔄'; 
+
+        const WarningIcon = () => '⚠️'; 
+
+        const CheckIcon = () => '✅'; 
+
+        const HelpIcon = () => '🚨'; 
+
+        const SoundIcon = () => '🔊'; 
+
+        const FlashIcon = () => '⚡'; 
+
+        const OnlineDot = () => <span className="inline-block w-3 h-3 rounded-full bg-accent-green mr-1"></span>; // NEW: Online status
+
+
+
+        // --- 2. UI Components ---
+
+        // Toast Notification component for success feedback
+
+        function Toast({ message, show, icon = <CheckIcon />, bgColor = 'bg-accent-green' }) {
+
+            return (
+
+                <div className={cn("toast", show && "show", bgColor)}>
+
+                    <div className="flex items-center gap-2">
+
+                        <span className="text-xl">{icon}</span>
+
+                        <span>{message}</span>
+
+                    </div>
+
+                </div>
+
+            );
+
+        }
+
+
+
+        const Card = ({ children, className, variant = 'light' }) => {
+
+            const baseClasses = "rounded-xl shadow-md";
+
+            const lightClasses = "bg-surface border border-secondary text-text-primary";
+
+            const darkClasses = "reports-card-dark border";
+
+
+
+            return (
+
+                <div className={cn(baseClasses, variant === 'dark' ? darkClasses : lightClasses, className)}>
+
+                    {children}
+
+                </div>
+
+            );
+
+        };
+
+        const Button = ({ children, onClick, disabled, className, id, type = 'button' }) => <button id={id} type={type} onClick={onClick} disabled={disabled} className={cn("px-4 py-2 rounded-lg font-semibold transition-colors shadow-lg active:scale-[0.98]", className)}>{children}</button>;
+
+
+
+        // --- Contact List Data ---
+
+        const emergencyContacts = {
+
+            critical: [
+
+                 // This acts as a header/divider for the critical section
+
+                 { type: 'header', name: 'Critical Emergency Numbers', detail: 'These numbers work even without load balance. Use them immediately in emergencies.' }
+
+            ],
+
+            national: [
+
+                { type: 'national', name: 'National Emergency Hotline', detail: 'Police, Fire, Medical Emergencies', number: '911', color: 'bg-accent-red' },
+
+                { type: 'national', name: 'NDRRMC Hotline', detail: 'National Disaster Risk Reduction', number: '143', color: 'bg-accent-red' },
+
+                { type: 'national', name: 'Philippine Red Cross', detail: 'Emergency medical assistance', number: '143', color: 'bg-accent-red' },
+
+                { type: 'national', name: 'PHIVOLCS Hotline', detail: 'Earthquake information and alerts', number: '0284261468', color: 'bg-accent-red' },
+
+            ],
+
+            local: [
+
+                // START OF USER REQUESTED CHANGE: Updated header from "Cebu Province" to "Tibuok Cebu"
+
+                { type: 'header', name: 'Local Emergency Services (Tibuok Cebu)', detail: 'Cebu Province and City' },
+
+                { type: 'local', name: 'Cebu Provincial DRRM Office', detail: 'Provincial disaster coordination', number: '0322556666', color: 'bg-primary' },
+
+                { type: 'local', name: 'Cebu City DRRM Office', detail: 'Cebu City disaster response', number: '0322666666', color: 'bg-primary' },
+
+                { type: 'local', name: 'Cebu City Police Office', detail: 'Cebu City law enforcement', number: '0322312222', color: 'bg-primary' },
+
+                // END OF USER REQUESTED CHANGE
+
+            ]
+
+        };
+
+
+
+        // --- Contact List Sub-Component ---
+
+        function EmergencyContactList({ contacts, isNational }) {
+
+            return (
+
+                <div className="space-y-3">
+
+                    {contacts.map((contact, index) => { 
+
+                        if (contact.type === 'header') {
+
+                            return (
+
+                                <div key={index} className="pt-4 pb-1">
+
+                                    <h3 className="font-bold text-lg reports-text-light">{contact.name}</h3>
+
+                                    <p className="text-xs text-gray-400">{contact.detail}</p>
+
+                                    <hr className="mt-2 border-gray-600" />
+
+                                </div>
+
+                            );
+
+                        }
+
+                        
+
+                        // Render Call Button Card
+
+                        const buttonColorClass = contact.color;
+
+                        
+
+                        return (
+
+                            // **SOS FUNCTIONALITY IS HERE**: The 'tel:' protocol makes the link functional for calling on mobile devices.
+
+                            <Card key={`${contact.number}-${index}`} variant="dark" className="p-3 shadow-md border-opacity-30">
+
+                                <h4 className="font-semibold reports-text-light">{contact.name}</h4>
+
+                                <p className="text-sm text-gray-400 mb-2">{contact.detail}</p>
+
+                                <a 
+
+                                    href={`tel:${contact.number}`} 
+
+                                    className={cn("flex items-center justify-center gap-2 p-3 rounded-lg font-bold text-white transition-transform active:scale-95", buttonColorClass, 
+
+                                        contact.color === 'bg-accent-red' ? 'hover:bg-accent-red/80' : 'hover:bg-primary/80')}
+
+                                >
+
+                                    <PhoneIcon /> CALL {contact.number}
+
+                                </a>
+
+                            </Card>
+
+                        );
+
+                    })}
+
+                </div>
+
+            );
+
+        }
+
+
+
+        // --- 3. Page Components ---
+
+        function HomePage({ bulletins, currentAlert, showToast, isSyncing, handleSync }) {
+
+            const [lastSync, setLastSync] = useState("Just now");
+
+            const chartRef = useRef(null);
+
+            const chartInstanceRef = useRef(null);
+
+
+
+            // Effect to handle the Chart.js Bubble Chart
+
+            useEffect(() => {
+
+                if (chartRef.current && bulletins.length > 0) {
+
+                    // FIX 3: Check if Chart is defined globally before attempting to initialize
+
+                    if (typeof Chart === 'undefined') {
+
+                        console.warn("Chart.js library is not loaded. Cannot display seismic chart.");
+
+                        return; 
+
+                    }
+
+                    
+
+                    if (chartInstanceRef.current) {
+
+                        chartInstanceRef.current.destroy();
+
+                    }
+
+                    const ctx = chartRef.current.getContext('2d');
+
+                    
+
+                    const chartData = {
+
+                        datasets: bulletins.filter(b => b.magnitude !== 'N/A').map(b => ({
+
+                            label: b.location,
+
+                            data: [{
+
+                                x: new Date(b.date.split(' - ')[0]),
+
+                                y: parseFloat(b.depth),
+
+                                r: parseFloat(b.magnitude) * 4,
+
+                            }],
+
+                            // Dark mode compatible colors
+
+                            backgroundColor: b.severity === 'extreme' ? 'rgba(229, 62, 62, 0.7)' : b.severity === 'high' ? 'rgba(246, 173, 85, 0.7)' : 'rgba(66, 153, 225, 0.7)',
+
+                            borderColor: b.severity === 'extreme' ? '#E53E3E' : b.severity === 'high' ? '#F6AD55' : '#4299E1',
+
+                            borderWidth: 1,
+
+                        }))
+
+                    };
+
+
+
+                    chartInstanceRef.current = new Chart(ctx, {
+
+                        type: 'bubble',
+
+                        data: chartData,
+
+                        options: {
+
+                            responsive: true,
+
+                            maintainAspectRatio: false,
+
+                            scales: {
+
+                                x: {
+
+                                    type: 'time',
+
+                                    time: { unit: 'day' },
+
+                                    title: { display: true, text: 'Date of Event', color: '#A0AEC0' },
+
+                                    grid: { color: '#4A5568' }, // Dark grid lines
+
+                                    ticks: { color: '#E2E8F0' } // Light ticks
+
+                                },
+
+                                y: {
+
+                                    title: { display: true, text: 'Depth (km)', color: '#A0AEC0' },
+
+                                    grid: { color: '#4A5568' },
+
+                                    ticks: { color: '#E2E8F0', reverse: true }
+
+                                }
+
+                            },
+
+                            plugins: {
+
+                                legend: { display: false },
+
+                                tooltip: {
+
+                                    callbacks: {
+
+                                        label: function(context) {
+
+                                            const d = context.raw;
+
+                                            return `${context.dataset.label}: Mag ${d.r/4}, Depth ${d.y} km`;
+
+                                        }
+
+                                    }
+
+                                }
+
+                            }
+
+                        }
+
+                    });
+
+                }
+
+                return () => {
+
+                    if (chartInstanceRef.current) {
+
+                        chartInstanceRef.current.destroy();
+
+                        chartInstanceRef.current = null;
+
+                    }
+
+                };
+
+            }, [bulletins]);
+
+            
+
+            // Function to update sync status after successful sync
+
+            const performSync = async () => {
+
+                const success = await handleSync();
+
+                if (success) {
+
+                    setLastSync(new Date().toLocaleTimeString());
+
+                    showToast('Sync Complete: Latest earthquake data and bulletins downloaded for offline use.');
+
+                } else {
+
+                    showToast('Sync Failed: Check your internet connection.', <WarningIcon/>, 'bg-accent-red');
+
+                }
+
+            }
+
+
+
+
+
+            return (
+
+                <div className="space-y-6 px-4">
+
+                    <div className="text-center">
+
+                        <h1 className="text-3xl font-extrabold text-text-primary">QuakeSafe Dashboard</h1>
+
+                        <p className="text-text-secondary mt-1">Situational awareness in a crisis. Easy to use, advanced information. (Sayon gamiton, apan mas gamit!) </p>
+
+                        
+
+                        {/* Prominent Alert Status Banner */}
+
+                        <div className={cn("mt-4 p-3 rounded-xl font-extrabold text-lg transition-all shadow-md", currentAlert.color)}>
+
+                            CURRENT STATUS: {currentAlert.level}
+
+                        </div>
+
+                    </div>
+
+
+
+                    {/* NEW Sync Status Card */}
+
+                    <Card className="p-4 md:p-6 space-y-3">
+
+                        <h2 className="text-xl font-bold text-text-primary mb-3">PHIVOLCS Data Sync</h2>
+
+                        <div className="flex justify-between items-center pb-2 border-b border-secondary">
+
+                            <h3 className="font-bold text-lg text-text-primary flex items-center gap-2"><SyncIcon /> Sync Status</h3>
+
+                            <p className="text-sm text-text-secondary">Last synced: <span className="font-semibold">{lastSync}</span></p>
+
+                        </div>
+
+                        <Button onClick={performSync} disabled={isSyncing} className="w-full bg-sync-blue hover:bg-primary text-white flex items-center justify-center gap-2 shadow-lg">
+
+                            <SyncIcon /> {isSyncing ? 'Synchronizing...' : 'Sync Latest PHIVOLCS Data'}
+
+                        </Button>
+
+                        <p className="text-xs text-text-secondary text-center">Tap to connect and refresh data for offline use (Requires internet).</p>
+
+                    </Card>
+
+
+
+                    <Card className="p-4 md:p-6">
+
+                        <h2 className="text-xl font-bold text-text-primary mb-3">Recent Seismic Activity</h2>
+
+                        <div className="chart-container">
+
+                            <canvas ref={chartRef}></canvas>
+
+                        </div>
+
+                         <p className="text-xs text-text-secondary text-center mt-2">This chart plots recent earthquakes by date and depth. The size of each bubble corresponds to the earthquake's magnitude. It helps visualize if events are shallow (potentially more damaging) and frequent.</p>
+
+                    </Card>
+
+
+
+                    <div>
+
+                        <h2 className="text-xl font-bold text-text-primary mb-3">Latest Bulletins</h2>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+                            {bulletins.map((b, i) => (
+
+                                <Card key={i} className={cn("p-4", 
+
+                                    // Adjusted colors for dark mode context
+
+                                    b.severity === 'extreme' && "bg-accent-red/20 border-accent-red",
+
+                                    b.severity === 'high' && "bg-accent-orange/20 border-accent-orange",
+
+                                    b.severity === 'moderate' && "bg-primary/20 border-primary"
+
+                                )}>
+
+                                    <p className="font-mono text-xs text-text-secondary">{b.number}</p>
+
+                                    <h3 className="font-bold text-text-primary">{b.location}</h3>
+
+                                    <p className="text-sm mt-1">Mag <span className="font-extrabold">{b.magnitude}</span> at <span className="font-extrabold">{b.depth}</span> depth</p>
+
+                                    <p className="text-xs text-text-secondary mt-2">{b.date}</p>
+
+                                </Card>
+
+                            ))}
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            );
+
+        }
+
+
+
+        function SafetyPage() {
+
+            const [content, setContent] = useState('');
+
+            const [isLoading, setIsLoading] = useState(false);
+
+            const [topic, setTopic] = useState('');
+
+            
+
+            const topics = {
+
+                'Kit': 'Generate a detailed checklist for an earthquake survival kit for a Filipino family.',
+
+                'During': 'What are the exact steps to take during a strong earthquake inside a building?',
+
+                'After': 'List the immediate safety checks and actions after an earthquake has stopped.'
+
+            };
+
+
+
+            const getAdvice = useCallback(async (selectedTopic) => {
+
+                if (!selectedTopic) return;
+
+                setIsLoading(true);
+
+                setContent('');
+
+                setTopic(selectedTopic);
+
+                const systemPrompt = "You are a disaster preparedness expert. Provide clear, concise, actionable advice in Markdown format. Use headings and lists.";
+
+                try {
+
+                    const payload = { contents: [{ parts: [{ text: topics[selectedTopic] }] }], systemInstruction: { parts: [{ text: systemPrompt }] } };
+
+                    const result = await callApiWithRetry(payload);
+
+                    setContent(result.candidates[0].content.parts[0].text);
+
+                } catch (e) {
+
+                    setContent("Error fetching safety advice. Please check your connection.");
+
+                } finally {
+
+                    setIsLoading(false);
+
+                }
+
+            }, []);
+
+
+
+            useEffect(() => { getAdvice('Kit'); }, [getAdvice]);
+
+
+
+            return (
+
+                <div className="space-y-6 px-4">
+
+                     <div className="text-center">
+
+                        <h1 className="text-3xl font-extrabold text-text-primary">Safety & Preparedness</h1>
+
+                        <p className="text-text-secondary mt-1">This section provides proactive, life-saving information. Use these AI-generated guides to prepare your family and know what to do in specific scenarios before, during, and after an earthquake.</p>
+
+                    </div>
+
+                    <Card className="p-4 flex justify-center gap-2 bg-surface">
+
+                        {Object.keys(topics).map(t => (
+
+                            <Button key={t} onClick={() => getAdvice(t)} disabled={isLoading || topic === t} 
+
+                                className={cn(
+
+                                    topic === t ? "bg-primary text-white" : "bg-secondary/50 text-text-primary",
+
+                                    "hover:bg-primary/80 hover:text-white"
+
+                                )}
+
+                            >
+
+                                {t}
+
+                            </Button>
+
+                        ))}
+
+                    </Card>
+
+                    <Card className="p-4 md:p-6 min-h-[300px] bg-surface">
+
+                        {isLoading ? <p className="text-text-secondary">Generating advice...</p> : <div className="prose" dangerouslySetInnerHTML={{ __html: content.replace(/\n/g, '<br />').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/##\s(.*?)/g, '<h3>$1</h3>') }}></div>}
+
+                    </Card>
+
+                </div>
+
+            );
+
+        }
+
+
+
+        function MapsPage({ showToast }) {
+
+            const { db, userId, appId, isReady } = useFirebase();
+
+            
+
+            // Hazard Search States
+
+            const [query, setQuery] = useState('');
+
+            const [result, setResult] = useState(null);
+
+            const [isLoading, setIsLoading] = useState(false);
+
+            
+
+            // Request Help States
+
+            const [helpForm, setHelpForm] = useState({ items: '', people: '', notes: '', contact: '' });
+
+            const [isRequesting, setIsRequesting] = useState(false);
+
+            
+
+            // Rescuer Alert States (NEW)
+
+            const audioContextRef = useRef(null);
+
+            const oscillatorRef = useRef(null);
+
+            const gainNodeRef = useRef(null); 
+
+            const flashIntervalRef = useRef(null);
+
+
+
+            const [isSounding, setIsSounding] = useState(false);
+
+            const [isFlashing, setIsFlashing] = useState(false);
+
+            const [flashColor, setFlashColor] = useState('bg-yellow-400'); // For visual feedback
+
+            
+
+            const startSoundAlert = () => {
+
+                if (isSounding) {
+
+                    stopSoundAlert();
+
+                    return;
+
+                }
+
+                
+
+                // Initialize AudioContext if not already done
+
+                if (!audioContextRef.current) {
+
+                    // Note: window.AudioContext may be prefixed on some older browsers
+
+                    audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+
+                }
+
+                const context = audioContextRef.current;
+
+                
+
+                // Create an oscillator (sound source)
+
+                const oscillator = context.createOscillator();
+
+                oscillator.type = 'sawtooth'; // Piercing sound
+
+                oscillator.frequency.setValueAtTime(800, context.currentTime); 
+
+                
+
+                // Create gain node (volume control)
+
+                const gainNode = context.createGain();
+
+                gainNode.gain.setValueAtTime(0, context.currentTime);
+
+                // Ramp up volume quickly for immediate sound
+
+                gainNode.gain.linearRampToValueAtTime(0.5, context.currentTime + 0.05); 
+
+                
+
+                // Connect nodes
+
+                oscillator.connect(gainNode);
+
+                gainNode.connect(context.destination);
+
+                
+
+                // Start the sound and store references
+
+                oscillator.start();
+
+                oscillatorRef.current = oscillator;
+
+                gainNodeRef.current = gainNode; 
+
+                setIsSounding(true);
+
+            };
+
+
+
+            const stopSoundAlert = () => {
+
+                const oscillator = oscillatorRef.current;
+
+                const gainNode = gainNodeRef.cu

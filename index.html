@@ -1,8 +1,8 @@
-<!-- Chosen Palette: Dark Mode (Inspired by image) -->
+<!-- Chosen Palette: Warm Neutrals -->
 
 <!-- Application Structure Plan: A multi-section, single-page application design was chosen to provide a clear, task-oriented user experience. The structure uses a persistent bottom navigation bar to switch between four distinct sections: 1) a "Home" dashboard for immediate situational awareness (sync status, critical advisories, latest bulletins, and a new data visualization of seismic activity); 2) a "Safety" section for proactive, AI-generated preparedness guides; 3) a "Maps" section with AI-powered tools for location-specific hazard search and the new Request Help and Rescuer Alerts; and 4) a "Reports" section for community-driven interaction, including an emergency SOS beacon and a real-time feed of user-submitted reports. This architecture separates official data from user-generated content and tools, preventing cognitive overload and allowing users to navigate directly to the information or action they need most during a crisis. The flow is designed to be intuitive and mobile-first, prioritizing clarity and speed of access. The 'Reports' page now serves as the 'Emergency SOS & Contacts' hub. -->
 
-<!-- Visualization & Content Choices: Report Info: Recent earthquake events (magnitude, depth, date). -> Goal: Compare & see relationships. -> Viz/Method: Interactive Bubble Chart showing depth vs. date, with bubble size representing magnitude. -> Interaction: Tooltip on hover displays detailed info for each quake. -> Library/Method: Chart.js (Canvas). Report Info: Official Advisories & Bulletins. -> Goal: Inform. -> Viz/Method: Styled HTML cards with clear typography and color-coding for severity. -> Interaction: None. -> Justification: Cards are highly scannable on mobile for urgent information. -> Library/Method: HTML/CSS. Report Info: Safety Guides. -> Goal: Inform. -> Viz/Method: Dynamically updated text block. -> Interaction: User selects topic via buttons to trigger AI content generation. -> Justification: Keeps UI clean by showing only relevant information on demand. -> Library/Method: JS/API. Report Info: Community-submitted reports. -> Goal: Organize & Inform. -> Viz/Method: Real-time feed of styled cards. -> Interaction: Form submission. -> Justification: Provides live, ground-truth information from other users. -> Library/Method: HTML/CSS + Firebase. -->
+<!-- Visualization & Content Choices: Report Info: Recent earthquake events (magnitude, depth, date). -> Goal: Compare & see relationships. -> Viz/Method: Interactive Bubble Chart showing depth vs. date, with bubble size representing magnitude. -> Interaction: Tooltip on hover displays detailed info for each quake. -> Justification: Provides a quick, data-dense visual summary of seismic activity, far more insightful than a simple list. -> Library/Method: Chart.js (Canvas). Report Info: Official Advisories & Bulletins. -> Goal: Inform. -> Viz/Method: Styled HTML cards with clear typography and color-coding for severity. -> Interaction: None. -> Justification: Cards are highly scannable on mobile for urgent information. -> Library/Method: HTML/CSS. Report Info: Safety Guides. -> Goal: Inform. -> Viz/Method: Dynamically updated text block. -> Interaction: User selects topic via buttons to trigger AI content generation. -> Justification: Keeps UI clean by showing only relevant information on demand. -> Library/Method: JS/API. Report Info: Community-submitted reports. -> Goal: Organize & Inform. -> Viz/Method: Real-time feed of styled cards. -> Interaction: Form submission. -> Justification: Provides live, ground-truth information from other users. -> Library/Method: HTML/CSS + Firebase. -->
 
 <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
 
@@ -26,15 +26,13 @@
 
     
 
-    <!-- Date Adapter for Chart.js 'time' scale -->
+    <!-- Date Adapter for Chart.js 'time' scale (FIXED) -->
 
     <script src="https://cdn.jsdelivr.net/npm/date-fns/dist/date-fns.umd.min.js"></script>
 
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
 
     
-
-    <!-- Firebase SDK (Compat versions for global access in single HTML file) -->
 
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 
@@ -43,8 +41,6 @@
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 
 
-
-    <!-- React and Babel (Use createRoot for React 18 compatibility) -->
 
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
 
@@ -64,15 +60,11 @@
 
     <style>
 
-        /* UPDATED: Global Dark Background based on user's image */
-
         body {
 
-            background-color: #1A202C; 
+            background-color: #FDFBF6; /* Global light background */
 
             font-family: 'Inter', sans-serif;
-
-            color: #E2E8F0; /* Light text for dark background */
 
         }
 
@@ -102,10 +94,6 @@
 
         }
 
-        
-
-        /* Typography adjustments for Dark Mode */
-
         .prose h3 {
 
             font-size: 1.25rem;
@@ -116,7 +104,7 @@
 
             margin-bottom: 0.5rem;
 
-            color: #CBD5E0; /* Lighter heading color */
+            color: #776B5D;
 
         }
 
@@ -126,7 +114,7 @@
 
             line-height: 1.6;
 
-            color: #A0AEC0; /* Subdued text color */
+            color: #4F4A45;
 
         }
 
@@ -138,11 +126,11 @@
 
 
 
-        /* Styling for the Reports Page (which was already dark, now ensuring consistency) */
+        /* Styling for the dark, high-contrast Reports Page */
 
         .reports-dark-bg {
 
-            background-color: #1A202C; /* Match body background */
+            background-color: #1F2937; /* Dark background for emergency focus */
 
             min-height: 100vh;
 
@@ -150,11 +138,9 @@
 
         .reports-text-light {
 
-            color: #E2E8F0;
+            color: #FDFBF6;
 
         }
-
-        /* Ensure dark cards look good on the dark background */
 
         .reports-card-dark {
 
@@ -162,7 +148,7 @@
 
             border-color: #4A5568;
 
-            color: #E2E8F0;
+            color: #FDFBF6;
 
         }
 
@@ -186,7 +172,7 @@
 
             border-radius: 0.5rem;
 
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.5);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 
             opacity: 0;
 
@@ -240,35 +226,35 @@
 
             colors: {
 
-              // UPDATED DARK MODE PALETTE
+              'background': '#FDFBF6',
 
-              'background': '#1A202C', // Deep Slate/Navy
+              'surface': '#F5EFE6',
 
-              'surface': '#2D3748',    // Slightly lighter card/component background
+              'primary': '#B0926A',
 
-              'primary': '#4299E1',    // Vibrant Blue for primary actions/links (was brown)
+              'secondary': '#E4D4C8',
 
-              'secondary': '#4A5568',  // Border/Divider color
+              'text-primary': '#4F4A45',
 
-              'text-primary': '#E2E8F0', // Near White for main text
+              'text-secondary': '#776B5D',
 
-              'text-secondary': '#A0AEC0', // Light Gray for sub-text
+              'accent-red': '#C32222',
 
-              'accent-red': '#E53E3E', // Red for critical alerts
+              'accent-orange': '#D85413',
 
-              'accent-orange': '#F6AD55', // Orange for high alerts
+              'accent-blue': '#4A6FA5',
 
-              'accent-blue': '#4299E1', // Primary blue
+              'accent-green': '#286236',
 
-              'accent-green': '#48BB78', // Green for success/online
+              // Custom blue for sync button
 
-              // Custom colors
+              'sync-blue': '#1a56db',
 
-              'sync-blue': '#3B82F6', // Brighter blue for sync button
+              // Custom red for request help button (from image)
 
-              'help-red': '#E53E3E',  // Red for request help button (same as accent-red)
+              'help-red': '#cc3333',
 
-              'help-red-hover': '#C53030', 
+              'help-red-hover': '#b32d2d',
 
             },
 
@@ -290,7 +276,7 @@
 
 </head>
 
-<body class="bg-background">
+<body>
 
     <div id="root"></div>
 
@@ -368,35 +354,13 @@
 
                 try {
 
-                    // FIX 2.1: Check if the global 'firebase' object is loaded before proceeding
-
-                    if (typeof firebase === 'undefined' || typeof firebase.initializeApp === 'undefined') {
-
-                        throw new Error("Firebase SDK is not loaded. Please check script tags.");
-
-                    }
-
-                    
-
-                    const fireBaseGlobal = window.firebase;
-
-
-
                     const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
 
-                    const app = fireBaseGlobal.initializeApp(firebaseConfig);
+                    const app = firebase.initializeApp(firebaseConfig);
 
-                    const auth = fireBaseGlobal.auth();
+                    const auth = firebase.auth();
 
-                    const db = fireBaseGlobal.firestore();
-
-                    
-
-                    // FIX: Add debug logging to help diagnose connectivity issues.
-
-                    fireBaseGlobal.firestore.setLogLevel('debug');
-
-                    
+                    const db = firebase.firestore();
 
                     const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
@@ -442,9 +406,7 @@
 
                     console.error("Firebase init failed", error);
 
-                    // Still mark as ready so the UI doesn't hang, but db/auth will be null
-
-                    setServices(s => ({ ...s, isReady: true })); 
+                    setServices(s => ({ ...s, isReady: true })); // Mark as ready to avoid infinite loading screen
 
                 }
 
@@ -466,21 +428,19 @@
 
         const BellIcon = () => '🔔';
 
-        const PhoneIcon = () => '📞'; 
+        const PhoneIcon = () => '📞'; // Icon for call buttons
 
-        const SyncIcon = () => '🔄'; 
+        const SyncIcon = () => '🔄'; // Icon for sync button
 
-        const WarningIcon = () => '⚠️'; 
+        const WarningIcon = () => '⚠️'; // Icon for advisory
 
-        const CheckIcon = () => '✅'; 
+        const CheckIcon = () => '✅'; // Icon for success
 
-        const HelpIcon = () => '🚨'; 
+        const HelpIcon = () => '🚨'; // Icon for help request
 
-        const SoundIcon = () => '🔊'; 
+        const SoundIcon = () => '🔊'; // Icon for sound alert
 
-        const FlashIcon = () => '⚡'; 
-
-        const OnlineDot = () => <span className="inline-block w-3 h-3 rounded-full bg-accent-green mr-1"></span>; // NEW: Online status
+        const FlashIcon = () => '⚡'; // Icon for flash alert
 
 
 
@@ -512,9 +472,9 @@
 
         const Card = ({ children, className, variant = 'light' }) => {
 
-            const baseClasses = "rounded-xl shadow-md";
+            const baseClasses = "rounded-xl shadow-sm";
 
-            const lightClasses = "bg-surface border border-secondary text-text-primary";
+            const lightClasses = "bg-surface border border-secondary";
 
             const darkClasses = "reports-card-dark border";
 
@@ -532,7 +492,7 @@
 
         };
 
-        const Button = ({ children, onClick, disabled, className, id, type = 'button' }) => <button id={id} type={type} onClick={onClick} disabled={disabled} className={cn("px-4 py-2 rounded-lg font-semibold transition-colors shadow-lg active:scale-[0.98]", className)}>{children}</button>;
+        const Button = ({ children, onClick, disabled, className, id, type = 'button' }) => <button id={id} type={type} onClick={onClick} disabled={disabled} className={cn("px-4 py-2 rounded-lg font-semibold transition-colors shadow", className)}>{children}</button>;
 
 
 
@@ -562,17 +522,13 @@
 
             local: [
 
-                // START OF USER REQUESTED CHANGE: Updated header from "Cebu Province" to "Tibuok Cebu"
+                { type: 'header', name: 'Local Emergency Services', detail: 'Cebu Province' },
 
-                { type: 'header', name: 'Local Emergency Services (Tibuok Cebu)', detail: 'Cebu Province and City' },
+                { type: 'local', name: 'Cebu Provincial DRRM Office', detail: 'Provincial disaster coordination', number: '0322556666', color: 'bg-accent-blue' },
 
-                { type: 'local', name: 'Cebu Provincial DRRM Office', detail: 'Provincial disaster coordination', number: '0322556666', color: 'bg-primary' },
+                { type: 'local', name: 'Cebu City DRRM Office', detail: 'Cebu City disaster response', number: '0322666666', color: 'bg-accent-blue' },
 
-                { type: 'local', name: 'Cebu City DRRM Office', detail: 'Cebu City disaster response', number: '0322666666', color: 'bg-primary' },
-
-                { type: 'local', name: 'Cebu City Police Office', detail: 'Cebu City law enforcement', number: '0322312222', color: 'bg-primary' },
-
-                // END OF USER REQUESTED CHANGE
+                { type: 'local', name: 'Cebu City Police Office', detail: 'Cebu City law enforcement', number: '0322312222', color: 'bg-accent-blue' },
 
             ]
 
@@ -630,9 +586,7 @@
 
                                     href={`tel:${contact.number}`} 
 
-                                    className={cn("flex items-center justify-center gap-2 p-3 rounded-lg font-bold text-white transition-transform active:scale-95", buttonColorClass, 
-
-                                        contact.color === 'bg-accent-red' ? 'hover:bg-accent-red/80' : 'hover:bg-primary/80')}
+                                    className={cn("flex items-center justify-center gap-2 p-3 rounded-lg font-bold text-white transition-transform active:scale-95", buttonColorClass)}
 
                                 >
 
@@ -654,6 +608,8 @@
 
 
 
+
+
         // --- 3. Page Components ---
 
         function HomePage({ bulletins, currentAlert, showToast, isSyncing, handleSync }) {
@@ -671,18 +627,6 @@
             useEffect(() => {
 
                 if (chartRef.current && bulletins.length > 0) {
-
-                    // FIX 3: Check if Chart is defined globally before attempting to initialize
-
-                    if (typeof Chart === 'undefined') {
-
-                        console.warn("Chart.js library is not loaded. Cannot display seismic chart.");
-
-                        return; 
-
-                    }
-
-                    
 
                     if (chartInstanceRef.current) {
 
@@ -710,11 +654,9 @@
 
                             }],
 
-                            // Dark mode compatible colors
+                            backgroundColor: b.severity === 'extreme' ? 'rgba(195, 34, 34, 0.7)' : b.severity === 'high' ? 'rgba(216, 84, 19, 0.7)' : 'rgba(176, 146, 106, 0.7)',
 
-                            backgroundColor: b.severity === 'extreme' ? 'rgba(229, 62, 62, 0.7)' : b.severity === 'high' ? 'rgba(246, 173, 85, 0.7)' : 'rgba(66, 153, 225, 0.7)',
-
-                            borderColor: b.severity === 'extreme' ? '#E53E3E' : b.severity === 'high' ? '#F6AD55' : '#4299E1',
+                            borderColor: b.severity === 'extreme' ? '#C32222' : b.severity === 'high' ? '#D85413' : '#B0926A',
 
                             borderWidth: 1,
 
@@ -744,21 +686,21 @@
 
                                     time: { unit: 'day' },
 
-                                    title: { display: true, text: 'Date of Event', color: '#A0AEC0' },
+                                    title: { display: true, text: 'Date of Event', color: '#776B5D' },
 
-                                    grid: { color: '#4A5568' }, // Dark grid lines
+                                    grid: { color: '#E4D4C8' },
 
-                                    ticks: { color: '#E2E8F0' } // Light ticks
+                                    ticks: { color: '#4F4A45' }
 
                                 },
 
                                 y: {
 
-                                    title: { display: true, text: 'Depth (km)', color: '#A0AEC0' },
+                                    title: { display: true, text: 'Depth (km)', color: '#776B5D' },
 
-                                    grid: { color: '#4A5568' },
+                                    grid: { color: '#E4D4C8' },
 
-                                    ticks: { color: '#E2E8F0', reverse: true }
+                                    ticks: { color: '#4F4A45', reverse: true }
 
                                 }
 
@@ -870,7 +812,7 @@
 
                         </div>
 
-                        <Button onClick={performSync} disabled={isSyncing} className="w-full bg-sync-blue hover:bg-primary text-white flex items-center justify-center gap-2 shadow-lg">
+                        <Button onClick={performSync} disabled={isSyncing} className="w-full bg-sync-blue hover:bg-blue-700 text-white flex items-center justify-center gap-2 shadow-lg">
 
                             <SyncIcon /> {isSyncing ? 'Synchronizing...' : 'Sync Latest PHIVOLCS Data'}
 
@@ -908,13 +850,9 @@
 
                                 <Card key={i} className={cn("p-4", 
 
-                                    // Adjusted colors for dark mode context
+                                    b.severity === 'extreme' && "bg-red-100 border-accent-red",
 
-                                    b.severity === 'extreme' && "bg-accent-red/20 border-accent-red",
-
-                                    b.severity === 'high' && "bg-accent-orange/20 border-accent-orange",
-
-                                    b.severity === 'moderate' && "bg-primary/20 border-primary"
+                                    b.severity === 'high' && "bg-orange-100 border-accent-orange"
 
                                 )}>
 
@@ -1014,33 +952,19 @@
 
                     </div>
 
-                    <Card className="p-4 flex justify-center gap-2 bg-surface">
+                    <Card className="p-4 flex justify-center gap-2">
 
                         {Object.keys(topics).map(t => (
 
-                            <Button key={t} onClick={() => getAdvice(t)} disabled={isLoading || topic === t} 
-
-                                className={cn(
-
-                                    topic === t ? "bg-primary text-white" : "bg-secondary/50 text-text-primary",
-
-                                    "hover:bg-primary/80 hover:text-white"
-
-                                )}
-
-                            >
-
-                                {t}
-
-                            </Button>
+                            <Button key={t} onClick={() => getAdvice(t)} disabled={isLoading || topic === t} className={topic === t ? "bg-primary text-white" : "bg-secondary text-text-primary"}>{t}</Button>
 
                         ))}
 
                     </Card>
 
-                    <Card className="p-4 md:p-6 min-h-[300px] bg-surface">
+                    <Card className="p-4 md:p-6 min-h-[300px]">
 
-                        {isLoading ? <p className="text-text-secondary">Generating advice...</p> : <div className="prose" dangerouslySetInnerHTML={{ __html: content.replace(/\n/g, '<br />').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/##\s(.*?)/g, '<h3>$1</h3>') }}></div>}
+                        {isLoading ? <p>Generating advice...</p> : <div className="prose" dangerouslySetInnerHTML={{ __html: content.replace(/\n/g, '<br />').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/##\s(.*?)/g, '<h3>$1</h3>') }}></div>}
 
                     </Card>
 
@@ -1082,8 +1006,6 @@
 
             const oscillatorRef = useRef(null);
 
-            const gainNodeRef = useRef(null); 
-
             const flashIntervalRef = useRef(null);
 
 
@@ -1111,8 +1033,6 @@
                 // Initialize AudioContext if not already done
 
                 if (!audioContextRef.current) {
-
-                    // Note: window.AudioContext may be prefixed on some older browsers
 
                     audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
 
@@ -1158,8 +1078,6 @@
 
                 oscillatorRef.current = oscillator;
 
-                gainNodeRef.current = gainNode; 
-
                 setIsSounding(true);
 
             };
@@ -1168,6 +1086,130 @@
 
             const stopSoundAlert = () => {
 
-                const oscillator = oscillatorRef.current;
+                if (oscillatorRef.current) {
 
-                const gainNode = gainNodeRef.cu
+                    try {
+
+                         // Smoothly fade out the sound
+
+                        const context = audioContextRef.current;
+
+                        const gainNode = oscillatorRef.current.context.destination.gain;
+
+                        gainNode.linearRampToValueAtTime(0, context.currentTime + 0.1);
+
+                        
+
+                        // Stop the oscillator after fade out
+
+                        setTimeout(() => {
+
+                            if (oscillatorRef.current) {
+
+                                oscillatorRef.current.stop();
+
+                                oscillatorRef.current = null;
+
+                            }
+
+                            // Do not close AudioContext as it can prevent further use until re-initialization
+
+                        }, 150);
+
+                    } catch (e) {
+
+                        console.error("Error stopping oscillator:", e);
+
+                        oscillatorRef.current.stop();
+
+                        oscillatorRef.current = null;
+
+                    }
+
+                   
+
+                }
+
+                setIsSounding(false);
+
+            };
+
+
+
+            const startFlashAlert = () => {
+
+                if (isFlashing) {
+
+                    stopFlashAlert();
+
+                    return;
+
+                }
+
+
+
+                // Toggle color every 100ms (10 flashes per second)
+
+                flashIntervalRef.current = setInterval(() => {
+
+                    setFlashColor(prev => prev === 'bg-yellow-400' ? 'bg-accent-red' : 'bg-yellow-400');
+
+                }, 100);
+
+
+
+                setIsFlashing(true);
+
+            };
+
+
+
+            const stopFlashAlert = () => {
+
+                if (flashIntervalRef.current) {
+
+                    clearInterval(flashIntervalRef.current);
+
+                    flashIntervalRef.current = null;
+
+                }
+
+                setIsFlashing(false);
+
+                setFlashColor('bg-yellow-400'); // Reset color
+
+            };
+
+            
+
+            // Cleanup effect to stop alerts when component unmounts or alerts are toggled off
+
+            useEffect(() => {
+
+                return () => {
+
+                    stopSoundAlert();
+
+                    stopFlashAlert();
+
+                };
+
+            }, []); // Empty dependency array ensures this runs only on unmount
+
+
+
+            const handleSearch = async (e) => {
+
+                e.preventDefault();
+
+                setIsLoading(true);
+
+                setResult(null);
+
+                const systemPrompt = "As a geologist, summarize search results for fault lines near the user's location in the Philippines.";
+
+                const payload = { contents: [{ parts: [{ text: `Find fault lines near ${query}, Philippines` }] }], systemInstruction: { parts: [{ text: systemPrompt }] } };
+
+                try {
+
+                    const res = await callApiWithRetry(payload, true);

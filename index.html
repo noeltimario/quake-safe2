@@ -1,1215 +1,934 @@
-<!-- Chosen Palette: Warm Neutrals -->
-
-<!-- Application Structure Plan: A multi-section, single-page application design was chosen to provide a clear, task-oriented user experience. The structure uses a persistent bottom navigation bar to switch between four distinct sections: 1) a "Home" dashboard for immediate situational awareness (sync status, critical advisories, latest bulletins, and a new data visualization of seismic activity); 2) a "Safety" section for proactive, AI-generated preparedness guides; 3) a "Maps" section with AI-powered tools for location-specific hazard search and the new Request Help and Rescuer Alerts; and 4) a "Reports" section for community-driven interaction, including an emergency SOS beacon and a real-time feed of user-submitted reports. This architecture separates official data from user-generated content and tools, preventing cognitive overload and allowing users to navigate directly to the information or action they need most during a crisis. The flow is designed to be intuitive and mobile-first, prioritizing clarity and speed of access. The 'Reports' page now serves as the 'Emergency SOS & Contacts' hub. -->
-
-<!-- Visualization & Content Choices: Report Info: Recent earthquake events (magnitude, depth, date). -> Goal: Compare & see relationships. -> Viz/Method: Interactive Bubble Chart showing depth vs. date, with bubble size representing magnitude. -> Interaction: Tooltip on hover displays detailed info for each quake. -> Justification: Provides a quick, data-dense visual summary of seismic activity, far more insightful than a simple list. -> Library/Method: Chart.js (Canvas). Report Info: Official Advisories & Bulletins. -> Goal: Inform. -> Viz/Method: Styled HTML cards with clear typography and color-coding for severity. -> Interaction: None. -> Justification: Cards are highly scannable on mobile for urgent information. -> Library/Method: HTML/CSS. Report Info: Safety Guides. -> Goal: Inform. -> Viz/Method: Dynamically updated text block. -> Interaction: User selects topic via buttons to trigger AI content generation. -> Justification: Keeps UI clean by showing only relevant information on demand. -> Library/Method: JS/API. Report Info: Community-submitted reports. -> Goal: Organize & Inform. -> Viz/Method: Real-time feed of styled cards. -> Interaction: Form submission. -> Justification: Provides live, ground-truth information from other users. -> Library/Method: HTML/CSS + Firebase. -->
-
-<!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
-
-<!doctype html>
-
+<!DOCTYPE html>
 <html lang="en">
-
 <head>
-
-    <meta charset="UTF-8" />
-
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
-    <title>QuakeSafe - Interactive Disaster Hub</title>
-
-    
-
-    <script src="https://cdn.tailwindcss.com"></script>
-
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
-    
-
-    <!-- Date Adapter for Chart.js 'time' scale (FIXED) -->
-
-    <script src="https://cdn.jsdelivr.net/npm/date-fns/dist/date-fns.umd.min.js"></script>
-
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
-
-    
-
-    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-
-    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
-
-    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-
-
-
-    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
-    
-
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Fira+Code&display=swap" rel="stylesheet">
-
-
-
-    <style>
-
-        body {
-
-            background-color: #FDFBF6; /* Global light background */
-
-            font-family: 'Inter', sans-serif;
-
-        }
-
-        .chart-container {
-
-            position: relative;
-
-            width: 100%;
-
-            max-width: 800px;
-
-            margin-left: auto;
-
-            margin-right: auto;
-
-            height: 300px;
-
-        }
-
-        @media (min-width: 640px) {
-
-            .chart-container {
-
-                height: 400px;
-
-            }
-
-        }
-
-        .prose h3 {
-
-            font-size: 1.25rem;
-
-            font-weight: 800;
-
-            margin-top: 1.5rem;
-
-            margin-bottom: 0.5rem;
-
-            color: #776B5D;
-
-        }
-
-        .prose p, .prose li {
-
-            font-size: 1rem;
-
-            line-height: 1.6;
-
-            color: #4F4A45;
-
-        }
-
-        .prose ul, .prose ol {
-
-            padding-left: 1.5rem;
-
-        }
-
-
-
-        /* Styling for the dark, high-contrast Reports Page */
-
-        .reports-dark-bg {
-
-            background-color: #1F2937; /* Dark background for emergency focus */
-
-            min-height: 100vh;
-
-        }
-
-        .reports-text-light {
-
-            color: #FDFBF6;
-
-        }
-
-        .reports-card-dark {
-
-            background-color: #2D3748;
-
-            border-color: #4A5568;
-
-            color: #FDFBF6;
-
-        }
-
-        
-
-        /* Toast notification styles */
-
-        .toast {
-
-            position: fixed;
-
-            bottom: 6rem;
-
-            left: 50%;
-
-            transform: translateX(-50%);
-
-            color: white;
-
-            padding: 1rem 1.5rem;
-
-            border-radius: 0.5rem;
-
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-
-            opacity: 0;
-
-            transition: opacity 0.3s ease-in-out;
-
-            z-index: 100;
-
-        }
-
-        .toast.show {
-
-            opacity: 1;
-
-        }
-
-        
-
-        /* Full-screen flash overlay for MapsPage */
-
-        .flash-overlay {
-
-            position: fixed;
-
-            top: 0;
-
-            left: 0;
-
-            width: 100vw;
-
-            height: 100vh;
-
-            z-index: 50; /* Below toast, above content */
-
-            pointer-events: none; /* Allows clicks to pass through */
-
-            transition: background-color 0.1s ease-in-out;
-
-        }
-
-    </style>
-
-    
-
-    <script>
-
-      tailwind.config = {
-
-        theme: {
-
-          extend: {
-
-            colors: {
-
-              'background': '#FDFBF6',
-
-              'surface': '#F5EFE6',
-
-              'primary': '#B0926A',
-
-              'secondary': '#E4D4C8',
-
-              'text-primary': '#4F4A45',
-
-              'text-secondary': '#776B5D',
-
-              'accent-red': '#C32222',
-
-              'accent-orange': '#D85413',
-
-              'accent-blue': '#4A6FA5',
-
-              'accent-green': '#286236',
-
-              // Custom blue for sync button
-
-              'sync-blue': '#1a56db',
-
-              // Custom red for request help button (from image)
-
-              'help-red': '#cc3333',
-
-              'help-red-hover': '#b32d2d',
-
-            },
-
-            fontFamily: {
-
-              sans: ['Inter', 'sans-serif'],
-
-              mono: ['Fira Code', 'monospace'],
-
-            }
-
-          }
-
-        }
-
-      }
-
-    </script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QuakeSafe - Offline Earthquake Info & Alerts</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0a0a0a; /* Very dark background */
+        }
+        /* Custom scrolling for better mobile feel */
+        .scrollable-content {
+            -webkit-overflow-scrolling: touch;
+        }
+        /* Enhanced Card Depth */
+        .depth-card {
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.4), 0 6px 6px rgba(0, 0, 0, 0.2);
+            transition: transform 0.2s ease-out, box-shadow 0.2s ease-out;
+            border: 1px solid #1f1f1f; /* subtle border */
+        }
+        /* Flash/Siren/SOS Overlay transition for dramatic effect */
+        #overlay {
+            transition: background-color 0.2s linear;
+        }
+        
+        /* Make the active tab visually distinct on the bottom border */
+        .nav-tab.active {
+            border-top-color: #fb923c; /* orange-400 */
+            color: #fb923c;
+        }
+    </style>
 
 </head>
-
-<body>
-
-    <div id="root"></div>
-
-
-
-    <script type="text/babel">
-
-        const { useState, createContext, useContext, useEffect, useCallback, useRef } = React;
-
-
-
-        // --- 0. API & Firebase Configuration ---
-
-        const API_KEY = ""; 
-
-        const API_MODEL = "gemini-2.5-flash-preview-05-20";
-
-        const cn = (...classes) => classes.filter(Boolean).join(' ');
-
-
-
-        async function callApiWithRetry(payload, useGrounding = false) {
-
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${API_MODEL}:generateContent?key=${API_KEY}`;
-
-            if (useGrounding) {
-
-                payload.tools = [{ "google_search": {} }];
-
-            }
-
-            for (let i = 0; i < 3; i++) {
-
-                try {
-
-                    const response = await fetch(apiUrl, {
-
-                        method: 'POST',
-
-                        headers: { 'Content-Type': 'application/json' },
-
-                        body: JSON.stringify(payload)
-
-                    });
-
-                    if (!response.ok) throw new Error(`API Error: ${response.status}`);
-
-                    return await response.json();
-
-                } catch (error) {
-
-                    if (i === 2) throw error;
-
-                    await new Promise(res => setTimeout(res, 1000 * Math.pow(2, i)));
-
-                }
-
-            }
-
-        }
-
-
-
-        const FirebaseContext = createContext(null);
-
-        const useFirebase = () => useContext(FirebaseContext);
-
-
-
-        function FirebaseProvider({ children }) {
-
-            const [services, setServices] = useState({ db: null, auth: null, userId: null, isReady: false, appId: 'default' });
-
-            useEffect(() => {
-
-                try {
-
-                    const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-
-                    const app = firebase.initializeApp(firebaseConfig);
-
-                    const auth = firebase.auth();
-
-                    const db = firebase.firestore();
-
-                    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-
-
-
-                    const authAction = async () => {
-
-                        try {
-
-                            const token = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-
-                            if (token) {
-
-                                await auth.signInWithCustomToken(token);
-
-                            } else {
-
-                                await auth.signInAnonymously();
-
-                            }
-
-                        } catch (e) {
-
-                            console.error("Auth failed:", e);
-
-                        }
-
-                    };
-
-
-
-                    auth.onAuthStateChanged(user => {
-
-                        const userId = user ? user.uid : 'anon-' + crypto.randomUUID();
-
-                        setServices({ db, auth, userId, isReady: true, appId });
-
-                    });
-
-                    authAction();
-
-                } catch (error) {
-
-                    console.error("Firebase init failed", error);
-
-                    setServices(s => ({ ...s, isReady: true })); // Mark as ready to avoid infinite loading screen
-
-                }
-
-            }, []);
-
-            return <FirebaseContext.Provider value={services}>{children}</FirebaseContext.Provider>;
-
-        }
-
-
-
-        // --- 1. Icons ---
-
-        const HomeIcon = () => '⌂';
-
-        const ShieldIcon = () => '🛡️';
-
-        const MapIcon = () => '🗺️';
-
-        const BellIcon = () => '🔔';
-
-        const PhoneIcon = () => '📞'; // Icon for call buttons
-
-        const SyncIcon = () => '🔄'; // Icon for sync button
-
-        const WarningIcon = () => '⚠️'; // Icon for advisory
-
-        const CheckIcon = () => '✅'; // Icon for success
-
-        const HelpIcon = () => '🚨'; // Icon for help request
-
-        const SoundIcon = () => '🔊'; // Icon for sound alert
-
-        const FlashIcon = () => '⚡'; // Icon for flash alert
-
-
-
-        // --- 2. UI Components ---
-
-        // Toast Notification component for success feedback
-
-        function Toast({ message, show, icon = <CheckIcon />, bgColor = 'bg-accent-green' }) {
-
-            return (
-
-                <div className={cn("toast", show && "show", bgColor)}>
-
-                    <div className="flex items-center gap-2">
-
-                        <span className="text-xl">{icon}</span>
-
-                        <span>{message}</span>
-
-                    </div>
-
-                </div>
-
-            );
-
-        }
-
-
-
-        const Card = ({ children, className, variant = 'light' }) => {
-
-            const baseClasses = "rounded-xl shadow-sm";
-
-            const lightClasses = "bg-surface border border-secondary";
-
-            const darkClasses = "reports-card-dark border";
-
-
-
-            return (
-
-                <div className={cn(baseClasses, variant === 'dark' ? darkClasses : lightClasses, className)}>
-
-                    {children}
-
-                </div>
-
-            );
-
-        };
-
-        const Button = ({ children, onClick, disabled, className, id, type = 'button' }) => <button id={id} type={type} onClick={onClick} disabled={disabled} className={cn("px-4 py-2 rounded-lg font-semibold transition-colors shadow", className)}>{children}</button>;
-
-
-
-        // --- Contact List Data ---
-
-        const emergencyContacts = {
-
-            critical: [
-
-                 // This acts as a header/divider for the critical section
-
-                 { type: 'header', name: 'Critical Emergency Numbers', detail: 'These numbers work even without load balance. Use them immediately in emergencies.' }
-
-            ],
-
-            national: [
-
-                { type: 'national', name: 'National Emergency Hotline', detail: 'Police, Fire, Medical Emergencies', number: '911', color: 'bg-accent-red' },
-
-                { type: 'national', name: 'NDRRMC Hotline', detail: 'National Disaster Risk Reduction', number: '143', color: 'bg-accent-red' },
-
-                { type: 'national', name: 'Philippine Red Cross', detail: 'Emergency medical assistance', number: '143', color: 'bg-accent-red' },
-
-                { type: 'national', name: 'PHIVOLCS Hotline', detail: 'Earthquake information and alerts', number: '0284261468', color: 'bg-accent-red' },
-
-            ],
-
-            local: [
-
-                { type: 'header', name: 'Local Emergency Services', detail: 'Cebu Province' },
-
-                { type: 'local', name: 'Cebu Provincial DRRM Office', detail: 'Provincial disaster coordination', number: '0322556666', color: 'bg-accent-blue' },
-
-                { type: 'local', name: 'Cebu City DRRM Office', detail: 'Cebu City disaster response', number: '0322666666', color: 'bg-accent-blue' },
-
-                { type: 'local', name: 'Cebu City Police Office', detail: 'Cebu City law enforcement', number: '0322312222', color: 'bg-accent-blue' },
-
-            ]
-
-        };
-
-
-
-        // --- Contact List Sub-Component ---
-
-        function EmergencyContactList({ contacts, isNational }) {
-
-            return (
-
-                <div className="space-y-3">
-
-                    {contacts.map((contact, index) => { 
-
-                        if (contact.type === 'header') {
-
-                            return (
-
-                                <div key={index} className="pt-4 pb-1">
-
-                                    <h3 className="font-bold text-lg reports-text-light">{contact.name}</h3>
-
-                                    <p className="text-xs text-gray-400">{contact.detail}</p>
-
-                                    <hr className="mt-2 border-gray-600" />
-
-                                </div>
-
-                            );
-
-                        }
-
-                        
-
-                        // Render Call Button Card
-
-                        const buttonColorClass = contact.color;
-
-                        
-
-                        return (
-
-                            // **SOS FUNCTIONALITY IS HERE**: The 'tel:' protocol makes the link functional for calling on mobile devices.
-
-                            <Card key={`${contact.number}-${index}`} variant="dark" className="p-3 shadow-md border-opacity-30">
-
-                                <h4 className="font-semibold reports-text-light">{contact.name}</h4>
-
-                                <p className="text-sm text-gray-400 mb-2">{contact.detail}</p>
-
-                                <a 
-
-                                    href={`tel:${contact.number}`} 
-
-                                    className={cn("flex items-center justify-center gap-2 p-3 rounded-lg font-bold text-white transition-transform active:scale-95", buttonColorClass)}
-
-                                >
-
-                                    <PhoneIcon /> CALL {contact.number}
-
-                                </a>
-
-                            </Card>
-
-                        );
-
-                    })}
-
-                </div>
-
-            );
-
-        }
-
-
-
-
-
-        // --- 3. Page Components ---
-
-        function HomePage({ bulletins, currentAlert, showToast, isSyncing, handleSync }) {
-
-            const [lastSync, setLastSync] = useState("Just now");
-
-            const chartRef = useRef(null);
-
-            const chartInstanceRef = useRef(null);
-
-
-
-            // Effect to handle the Chart.js Bubble Chart
-
-            useEffect(() => {
-
-                if (chartRef.current && bulletins.length > 0) {
-
-                    if (chartInstanceRef.current) {
-
-                        chartInstanceRef.current.destroy();
-
-                    }
-
-                    const ctx = chartRef.current.getContext('2d');
-
-                    
-
-                    const chartData = {
-
-                        datasets: bulletins.filter(b => b.magnitude !== 'N/A').map(b => ({
-
-                            label: b.location,
-
-                            data: [{
-
-                                x: new Date(b.date.split(' - ')[0]),
-
-                                y: parseFloat(b.depth),
-
-                                r: parseFloat(b.magnitude) * 4,
-
-                            }],
-
-                            backgroundColor: b.severity === 'extreme' ? 'rgba(195, 34, 34, 0.7)' : b.severity === 'high' ? 'rgba(216, 84, 19, 0.7)' : 'rgba(176, 146, 106, 0.7)',
-
-                            borderColor: b.severity === 'extreme' ? '#C32222' : b.severity === 'high' ? '#D85413' : '#B0926A',
-
-                            borderWidth: 1,
-
-                        }))
-
-                    };
-
-
-
-                    chartInstanceRef.current = new Chart(ctx, {
-
-                        type: 'bubble',
-
-                        data: chartData,
-
-                        options: {
-
-                            responsive: true,
-
-                            maintainAspectRatio: false,
-
-                            scales: {
-
-                                x: {
-
-                                    type: 'time',
-
-                                    time: { unit: 'day' },
-
-                                    title: { display: true, text: 'Date of Event', color: '#776B5D' },
-
-                                    grid: { color: '#E4D4C8' },
-
-                                    ticks: { color: '#4F4A45' }
-
-                                },
-
-                                y: {
-
-                                    title: { display: true, text: 'Depth (km)', color: '#776B5D' },
-
-                                    grid: { color: '#E4D4C8' },
-
-                                    ticks: { color: '#4F4A45', reverse: true }
-
-                                }
-
-                            },
-
-                            plugins: {
-
-                                legend: { display: false },
-
-                                tooltip: {
-
-                                    callbacks: {
-
-                                        label: function(context) {
-
-                                            const d = context.raw;
-
-                                            return `${context.dataset.label}: Mag ${d.r/4}, Depth ${d.y} km`;
-
-                                        }
-
-                                    }
-
-                                }
-
-                            }
-
-                        }
-
-                    });
-
-                }
-
-                return () => {
-
-                    if (chartInstanceRef.current) {
-
-                        chartInstanceRef.current.destroy();
-
-                        chartInstanceRef.current = null;
-
-                    }
-
-                };
-
-            }, [bulletins]);
-
-            
-
-            // Function to update sync status after successful sync
-
-            const performSync = async () => {
-
-                const success = await handleSync();
-
-                if (success) {
-
-                    setLastSync(new Date().toLocaleTimeString());
-
-                    showToast('Sync Complete: Latest earthquake data and bulletins downloaded for offline use.');
-
-                } else {
-
-                    showToast('Sync Failed: Check your internet connection.', <WarningIcon/>, 'bg-accent-red');
-
-                }
-
-            }
-
-
-
-
-
-            return (
-
-                <div className="space-y-6 px-4">
-
-                    <div className="text-center">
-
-                        <h1 className="text-3xl font-extrabold text-text-primary">QuakeSafe Dashboard</h1>
-
-                        <p className="text-text-secondary mt-1">Situational awareness in a crisis. Easy to use, advanced information. (Sayon gamiton, apan mas gamit!) </p>
-
-                        
-
-                        {/* Prominent Alert Status Banner */}
-
-                        <div className={cn("mt-4 p-3 rounded-xl font-extrabold text-lg transition-all shadow-md", currentAlert.color)}>
-
-                            CURRENT STATUS: {currentAlert.level}
-
-                        </div>
-
-                    </div>
-
-
-
-                    {/* NEW Sync Status Card */}
-
-                    <Card className="p-4 md:p-6 space-y-3">
-
-                        <h2 className="text-xl font-bold text-text-primary mb-3">PHIVOLCS Data Sync</h2>
-
-                        <div className="flex justify-between items-center pb-2 border-b border-secondary">
-
-                            <h3 className="font-bold text-lg text-text-primary flex items-center gap-2"><SyncIcon /> Sync Status</h3>
-
-                            <p className="text-sm text-text-secondary">Last synced: <span className="font-semibold">{lastSync}</span></p>
-
-                        </div>
-
-                        <Button onClick={performSync} disabled={isSyncing} className="w-full bg-sync-blue hover:bg-blue-700 text-white flex items-center justify-center gap-2 shadow-lg">
-
-                            <SyncIcon /> {isSyncing ? 'Synchronizing...' : 'Sync Latest PHIVOLCS Data'}
-
-                        </Button>
-
-                        <p className="text-xs text-text-secondary text-center">Tap to connect and refresh data for offline use (Requires internet).</p>
-
-                    </Card>
-
-
-
-                    <Card className="p-4 md:p-6">
-
-                        <h2 className="text-xl font-bold text-text-primary mb-3">Recent Seismic Activity</h2>
-
-                        <div className="chart-container">
-
-                            <canvas ref={chartRef}></canvas>
-
-                        </div>
-
-                         <p className="text-xs text-text-secondary text-center mt-2">This chart plots recent earthquakes by date and depth. The size of each bubble corresponds to the earthquake's magnitude. It helps visualize if events are shallow (potentially more damaging) and frequent.</p>
-
-                    </Card>
-
-
-
-                    <div>
-
-                        <h2 className="text-xl font-bold text-text-primary mb-3">Latest Bulletins</h2>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-
-                            {bulletins.map((b, i) => (
-
-                                <Card key={i} className={cn("p-4", 
-
-                                    b.severity === 'extreme' && "bg-red-100 border-accent-red",
-
-                                    b.severity === 'high' && "bg-orange-100 border-accent-orange"
-
-                                )}>
-
-                                    <p className="font-mono text-xs text-text-secondary">{b.number}</p>
-
-                                    <h3 className="font-bold text-text-primary">{b.location}</h3>
-
-                                    <p className="text-sm mt-1">Mag <span className="font-extrabold">{b.magnitude}</span> at <span className="font-extrabold">{b.depth}</span> depth</p>
-
-                                    <p className="text-xs text-text-secondary mt-2">{b.date}</p>
-
-                                </Card>
-
-                            ))}
-
-                        </div>
-
-                    </div>
-
-                </div>
-
-            );
-
-        }
-
-
-
-        function SafetyPage() {
-
-            const [content, setContent] = useState('');
-
-            const [isLoading, setIsLoading] = useState(false);
-
-            const [topic, setTopic] = useState('');
-
-            
-
-            const topics = {
-
-                'Kit': 'Generate a detailed checklist for an earthquake survival kit for a Filipino family.',
-
-                'During': 'What are the exact steps to take during a strong earthquake inside a building?',
-
-                'After': 'List the immediate safety checks and actions after an earthquake has stopped.'
-
-            };
-
-
-
-            const getAdvice = useCallback(async (selectedTopic) => {
-
-                if (!selectedTopic) return;
-
-                setIsLoading(true);
-
-                setContent('');
-
-                setTopic(selectedTopic);
-
-                const systemPrompt = "You are a disaster preparedness expert. Provide clear, concise, actionable advice in Markdown format. Use headings and lists.";
-
-                try {
-
-                    const payload = { contents: [{ parts: [{ text: topics[selectedTopic] }] }], systemInstruction: { parts: [{ text: systemPrompt }] } };
-
-                    const result = await callApiWithRetry(payload);
-
-                    setContent(result.candidates[0].content.parts[0].text);
-
-                } catch (e) {
-
-                    setContent("Error fetching safety advice. Please check your connection.");
-
-                } finally {
-
-                    setIsLoading(false);
-
-                }
-
-            }, []);
-
-
-
-            useEffect(() => { getAdvice('Kit'); }, [getAdvice]);
-
-
-
-            return (
-
-                <div className="space-y-6 px-4">
-
-                     <div className="text-center">
-
-                        <h1 className="text-3xl font-extrabold text-text-primary">Safety & Preparedness</h1>
-
-                        <p className="text-text-secondary mt-1">This section provides proactive, life-saving information. Use these AI-generated guides to prepare your family and know what to do in specific scenarios before, during, and after an earthquake.</p>
-
-                    </div>
-
-                    <Card className="p-4 flex justify-center gap-2">
-
-                        {Object.keys(topics).map(t => (
-
-                            <Button key={t} onClick={() => getAdvice(t)} disabled={isLoading || topic === t} className={topic === t ? "bg-primary text-white" : "bg-secondary text-text-primary"}>{t}</Button>
-
-                        ))}
-
-                    </Card>
-
-                    <Card className="p-4 md:p-6 min-h-[300px]">
-
-                        {isLoading ? <p>Generating advice...</p> : <div className="prose" dangerouslySetInnerHTML={{ __html: content.replace(/\n/g, '<br />').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/##\s(.*?)/g, '<h3>$1</h3>') }}></div>}
-
-                    </Card>
-
-                </div>
-
-            );
-
-        }
-
-
-
-        function MapsPage({ showToast }) {
-
-            const { db, userId, appId, isReady } = useFirebase();
-
-            
-
-            // Hazard Search States
-
-            const [query, setQuery] = useState('');
-
-            const [result, setResult] = useState(null);
-
-            const [isLoading, setIsLoading] = useState(false);
-
-            
-
-            // Request Help States
-
-            const [helpForm, setHelpForm] = useState({ items: '', people: '', notes: '', contact: '' });
-
-            const [isRequesting, setIsRequesting] = useState(false);
-
-            
-
-            // Rescuer Alert States (NEW)
-
-            const audioContextRef = useRef(null);
-
-            const oscillatorRef = useRef(null);
-
-            const flashIntervalRef = useRef(null);
-
-
-
-            const [isSounding, setIsSounding] = useState(false);
-
-            const [isFlashing, setIsFlashing] = useState(false);
-
-            const [flashColor, setFlashColor] = useState('bg-yellow-400'); // For visual feedback
-
-            
-
-            const startSoundAlert = () => {
-
-                if (isSounding) {
-
-                    stopSoundAlert();
-
-                    return;
-
-                }
-
-                
-
-                // Initialize AudioContext if not already done
-
-                if (!audioContextRef.current) {
-
-                    audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
-
-                }
-
-                const context = audioContextRef.current;
-
-                
-
-                // Create an oscillator (sound source)
-
-                const oscillator = context.createOscillator();
-
-                oscillator.type = 'sawtooth'; // Piercing sound
-
-                oscillator.frequency.setValueAtTime(800, context.currentTime); 
-
-                
-
-                // Create gain node (volume control)
-
-                const gainNode = context.createGain();
-
-                gainNode.gain.setValueAtTime(0, context.currentTime);
-
-                // Ramp up volume quickly for immediate sound
-
-                gainNode.gain.linearRampToValueAtTime(0.5, context.currentTime + 0.05); 
-
-                
-
-                // Connect nodes
-
-                oscillator.connect(gainNode);
-
-                gainNode.connect(context.destination);
-
-                
-
-                // Start the sound and store references
-
-                oscillator.start();
-
-                oscillatorRef.current = oscillator;
-
-                setIsSounding(true);
-
-            };
-
-
-
-            const stopSoundAlert = () => {
-
-                if (oscillatorRef.current) {
-
-                    try {
-
-                         // Smoothly fade out the sound
-
-                        const context = audioContextRef.current;
-
-                        const gainNode = oscillatorRef.current.context.destination.gain;
-
-                        gainNode.linearRampToValueAtTime(0, context.currentTime + 0.1);
-
-                        
-
-                        // Stop the oscillator after fade out
-
-                        setTimeout(() => {
-
-                            if (oscillatorRef.current) {
-
-                                oscillatorRef.current.stop();
-
-                                oscillatorRef.current = null;
-
-                            }
-
-                            // Do not close AudioContext as it can prevent further use until re-initialization
-
-                        }, 150);
-
-                    } catch (e) {
-
-                        console.error("Error stopping oscillator:", e);
-
-                        oscillatorRef.current.stop();
-
-                        oscillatorRef.current = null;
-
-                    }
-
-                   
-
-                }
-
-                setIsSounding(false);
-
-            };
-
-
-
-            const startFlashAlert = () => {
-
-                if (isFlashing) {
-
-                    stopFlashAlert();
-
-                    return;
-
-                }
-
-
-
-                // Toggle color every 100ms (10 flashes per second)
-
-                flashIntervalRef.current = setInterval(() => {
-
-                    setFlashColor(prev => prev === 'bg-yellow-400' ? 'bg-accent-red' : 'bg-yellow-400');
-
-                }, 100);
-
-
-
-                setIsFlashing(true);
-
-            };
-
-
-
-            const stopFlashAlert = () => {
-
-                if (flashIntervalRef.current) {
-
-                    clearInterval(flashIntervalRef.current);
-
-                    flashIntervalRef.current = null;
-
-                }
-
-                setIsFlashing(false);
-
-                setFlashColor('bg-yellow-400'); // Reset color
-
-            };
-
-            
-
-            // Cleanup effect to stop alerts when component unmounts or alerts are toggled off
-
-            useEffect(() => {
-
-                return () => {
-
-                    stopSoundAlert();
-
-                    stopFlashAlert();
-
-                };
-
-            }, []); // Empty dependency array ensures this runs only on unmount
-
-
-
-            const handleSearch = async (e) => {
-
-                e.preventDefault();
-
-                setIsLoading(true);
-
-                setResult(null);
-
-                const systemPrompt = "As a geologist, summarize search results for fault lines near the user's location in the Philippines.";
-
-                const payload = { contents: [{ parts: [{ text: `Find fault lines near ${query}, Philippines` }] }], systemInstruction: { parts: [{ text: systemPrompt }] } };
-
-                try {
-
-                    const res = await callApiWithRetry(payload, true);
+<body class="min-h-screen flex flex-col">
+
+    <!-- Tailwind JIT Class Inclusion Fix: Ensures dynamic colors for hotlines are available -->
+    <div class="hidden border-red-600 border-blue-600 border-yellow-600 border-green-600"></div>
+
+    <!-- Language & Header -->
+    <header class="sticky top-0 bg-black shadow-2xl p-4 flex justify-between items-center z-10 border-b border-gray-800">
+        <h1 class="text-2xl font-black text-white tracking-wider">Quake<span class="text-orange-400">Safe</span></h1>
+        <button id="lang-toggle" class="p-2 bg-orange-600 text-white rounded-full text-xs font-semibold shadow-lg hover:bg-orange-700 transition duration-200 active:scale-95">
+            Cebuano
+        </button>
+    </header>
+
+    <!-- Main Content Area (Tabs) -->
+    <main class="flex-grow scrollable-content overflow-y-auto p-4 md:p-6">
+        <!-- SAFETY GUIDE (Default View) -->
+        <section id="tab-guide" class="tab-content space-y-6">
+            <h2 class="text-3xl font-extrabold text-gray-100 mb-6 lang-en">Earthquake Safety Guide</h2>
+            <h2 class="text-3xl font-extrabold text-gray-100 mb-6 lang-ceb hidden">Giya sa Kaligtasan sa Linog</h2>
+
+            <!-- Before -->
+            <div class="bg-gray-900 depth-card p-4 rounded-xl border-l-4 border-blue-400">
+                <h3 class="flex items-center text-xl font-bold text-blue-400 mb-3">
+                    <i data-lucide="shield-check" class="w-6 h-6 mr-2"></i>
+                    <span class="lang-en">Before (Preparation)</span>
+                    <span class="lang-ceb hidden">Sa Dili Pa (Pag-andam)</span>
+                </h3>
+                <ul class="list-disc pl-5 text-gray-300 space-y-2">
+                    <li class="lang-en">Secure heavy items (cabinets, shelves) to the wall.</li>
+                    <li class="lang-ceb hidden">Siguroha ang bug-at nga mga butang (aparador, estante) sa dingding.</li>
+                    <li class="lang-en">Prepare a Go-Bag with water, food, first aid, and copies of IDs.</li>
+                    <li class="lang-ceb hidden">Pag-andam og Go-Bag nga adunay tubig, pagkaon, first aid, ug mga kopya sa ID.</li>
+                    <li class="lang-en">Identify safe spots (under sturdy tables) and danger zones (near windows).</li>
+                    <li class="lang-ceb hidden">Ilha ang luwas nga mga dapit ug mga delikado nga lugar (duol sa bintana).</li>
+                </ul>
+            </div>
+
+            <!-- During -->
+            <div class="bg-gray-900 depth-card p-4 rounded-xl border-l-4 border-red-500">
+                <h3 class="flex items-center text-xl font-bold text-red-500 mb-3">
+                    <i data-lucide="alert-triangle" class="w-6 h-6 mr-2"></i>
+                    <span class="lang-en">During (Action)</span>
+                    <span class="lang-ceb hidden">Panahon sa (Aksyon)</span>
+                </h3>
+                <p class="text-3xl font-black text-red-400 text-center my-4 p-2 bg-gray-800 rounded-lg">
+                    <span class="lang-en">DROP, COVER, HOLD ON!</span>
+                    <span class="lang-ceb hidden">DUKO, TABON, HUPOT!</span>
+                </p>
+                <ul class="list-disc pl-5 text-gray-300 space-y-2">
+                    <li class="lang-en">If indoors, stay inside. Move to a safe spot.</li>
+                    <li class="lang-ceb hidden">Kung naa sa sulod, magpabilin sa sulod. Balhin sa luwas nga dapit.</li>
+                    <li class="lang-en">Stay away from glass, exterior walls, and falling objects.</li>
+                    <li class="lang-ceb hidden">Palayo sa bildo, bungbong, ug mga butang nga mahulog.</li>
+                    <li class="lang-en">If in a vehicle, stop and stay inside.</li>
+                    <li class="lang-ceb hidden">Kung naa sa sakyanan, hunong ug magpabilin sa sulod.</li>
+                </ul>
+            </div>
+
+            <!-- After -->
+            <div class="bg-gray-900 depth-card p-4 rounded-xl border-l-4 border-green-400">
+                <h3 class="flex items-center text-xl font-bold text-green-400 mb-3">
+                    <i data-lucide="hand-heart" class="w-6 h-6 mr-2"></i>
+                    <span class="lang-en">After (Recovery)</span>
+                    <span class="lang-ceb hidden">Pagkahuman (Pagbawi)</span>
+                </h3>
+                <ul class="list-disc pl-5 text-gray-300 space-y-2">
+                    <li class="lang-en">Check yourself and others for injuries. Give first aid.</li>
+                    <li class="lang-ceb hidden">Susiha ang imong kaugalingon ug ang uban alang sa kadaot. Hatagi og first aid.</li>
+                    <li class="lang-en">Expect aftershocks. Be ready to Duko, Tabon, Hupot again.</li>
+                    <li class="lang-ceb hidden">Paghulat sa aftershocks. Pag-andam sa Duko, Tabon, Hupot pag-usab.</li>
+                    <li class="lang-en">Avoid damaged areas. Use stairs, not elevators.</li>
+                    <li class="lang-ceb hidden">Likayi ang nadaot nga mga lugar. Gamita ang hagdanan, dili elevator.</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- EMERGENCY TOOLKIT -->
+        <section id="tab-toolkit" class="tab-content hidden space-y-6">
+            <h2 class="text-3xl font-extrabold text-gray-100 mb-6 lang-en">Emergency Toolkit (High Impact)</h2>
+            <h2 class="text-3xl font-extrabold text-gray-100 mb-6 lang-ceb hidden">Mga Gamit sa Emerhensiya (Taas nga Epekto)</h2>
+
+            <!-- Flashlight (Screen) -->
+            <div class="p-4 bg-gray-900 depth-card rounded-xl text-center">
+                <h3 class="text-xl font-bold text-gray-100 mb-4 lang-en">Screen Flashlight</h3>
+                <h3 class="text-xl font-bold text-gray-100 mb-4 lang-ceb hidden">Sulo sa Screen</h3>
+                <button id="toggle-flashlight" class="w-full py-4 px-6 bg-yellow-500 text-gray-900 font-black text-xl rounded-xl shadow-xl hover:bg-yellow-600 transition duration-300 active:scale-[0.98] flex items-center justify-center">
+                    <i data-lucide="lightbulb" class="w-6 h-6 mr-2"></i>
+                    <span class="lang-en">Activate Light</span>
+                    <span class="lang-ceb hidden">I-aktibo ang Sulo</span>
+                </button>
+                <p class="mt-2 text-sm text-gray-400 lang-en">Fills the screen with bright white light for visibility.</p>
+                <p class="mt-2 text-sm text-gray-400 lang-ceb hidden">Pun-on ang screen sa hayag nga puti nga suga alang sa visibility.</p>
+            </div>
+
+            <!-- Siren Alarm -->
+            <div class="p-4 bg-gray-900 depth-card rounded-xl text-center">
+                <h3 class="text-xl font-bold text-gray-100 mb-4 lang-en">Distress Siren Alarm</h3>
+                <h3 class="text-xl font-bold text-gray-100 mb-4 lang-ceb hidden">Sirena sa Kalisud</h3>
+                <button id="toggle-siren" class="w-full py-4 px-6 bg-red-600 text-white font-black text-xl rounded-xl shadow-xl hover:bg-red-700 transition duration-300 active:scale-[0.98] flex items-center justify-center">
+                    <i data-lucide="volume-2" class="w-6 h-6 mr-2"></i>
+                    <span class="lang-en">Start Siren & Flash</span>
+                    <span class="lang-ceb hidden">Sugdi ang Sirena ug Flash</span>
+                </button>
+                <p class="mt-2 text-sm text-gray-400 lang-en">Plays a loud tone and flashes the device light (if available) + screen flash.</p>
+                <p class="mt-2 text-sm text-gray-400 lang-ceb hidden">Patukar og kusog nga tono ug i-flash ang suga sa device (kung anaa) + screen flash.</p>
+            </div>
+
+            <!-- SOS Signal -->
+            <div class="p-4 bg-gray-900 depth-card rounded-xl text-center">
+                <h3 class="text-xl font-bold text-gray-100 mb-4 lang-en">SOS Screen Signal</h3>
+                <h3 class="text-xl font-bold text-gray-100 mb-4 lang-ceb hidden">Signal SOS sa Screen</h3>
+                <button id="toggle-sos" class="w-full py-4 px-6 bg-blue-600 text-white font-black text-xl rounded-xl shadow-xl hover:bg-blue-700 transition duration-300 active:scale-[0.98] flex items-center justify-center">
+                    <i data-lucide="message-square" class="w-6 h-6 mr-2"></i>
+                    <span class="lang-en">Start S.O.S. ( • • • — — — • • • )</span>
+                    <span class="lang-ceb hidden">Sugdi ang S.O.S. ( • • • — — — • • • )</span>
+                </button>
+                <p class="mt-2 text-sm text-gray-400 lang-en">Flashes the screen in the Morse code pattern for S.O.S. (White/Black).</p>
+                <p class="mt-2 text-sm text-gray-400 lang-ceb hidden">I-flash ang screen sa Morse code pattern sa S.O.S. (Puti/Itom).</p>
+            </div>
+        </section>
+
+        <!-- SMART COMMUNICATION & CONNECTIVITY MODULE -->
+        <section id="tab-comms" class="tab-content hidden space-y-6">
+            <h2 class="text-3xl font-extrabold text-gray-100 mb-6 lang-en">Smart Communication & Connectivity</h2>
+            <h2 class="text-3xl font-extrabold text-gray-100 mb-6 lang-ceb hidden">Smart nga Komunikasyon & Koneksyon</h2>
+            
+            <!-- 1. Low-Bandwidth Micro-Packet Protocol -->
+            <div class="p-4 bg-gray-900 depth-card rounded-xl space-y-4 border-l-4 border-red-500">
+                <h3 class="flex items-center text-xl font-bold text-red-500">
+                    <i data-lucide="zap" class="w-6 h-6 mr-2"></i>
+                    <span class="lang-en">Priority Micro-Packet Protocol</span>
+                    <span class="lang-ceb hidden">Priority Micro-Packet Protocol</span>
+                </h3>
+                <p class="text-sm text-gray-400 lang-en">Transmit essential status (GPS + one code) using minimal data, prioritizing connection success over speed (Simulates GPRS/Low-Bandwidth).</p>
+                <p class="text-sm text-gray-400 lang-ceb hidden">Ipadala ang importante nga status gamit ang gamay nga data, i-una ang kalampusan sa koneksyon (GPRS Simulation).</p>
+
+                <div class="grid grid-cols-3 gap-2">
+                    <button data-status="Safe" class="micro-packet-btn py-3 bg-green-600 text-white font-black rounded-lg shadow-md hover:bg-green-700 transition active:scale-95">
+                        <i data-lucide="check-circle" class="w-5 h-5 mx-auto mb-1"></i>
+                        <span class="lang-en text-xs">SAFE</span>
+                        <span class="lang-ceb hidden text-xs">LUWAS</span>
+                    </button>
+                    <button data-status="Help" class="micro-packet-btn py-3 bg-yellow-600 text-white font-black rounded-lg shadow-md hover:bg-yellow-700 transition active:scale-95">
+                        <i data-lucide="hand" class="w-5 h-5 mx-auto mb-1"></i>
+                        <span class="lang-en text-xs">NEED HELP</span>
+                        <span class="lang-ceb hidden text-xs">KINAHANGLAN TABANG</span>
+                    </button>
+                    <button data-status="Trapped" class="micro-packet-btn py-3 bg-red-700 text-white font-black rounded-lg shadow-md hover:bg-red-800 transition active:scale-95">
+                        <i data-lucide="x-octagon" class="w-5 h-5 mx-auto mb-1"></i>
+                        <span class="lang-en text-xs">TRAPPED</span>
+                        <span class="lang-ceb hidden text-xs">NA-TRAP</span>
+                    </button>
+                </div>
+                <p id="micro-packet-status" class="pt-2 text-green-400 font-medium text-sm text-center hidden">
+                    <span class="lang-en">Status packet sent successfully! (See console)</span>
+                    <span class="lang-ceb hidden">Malampusong napadala ang status packet! (Tan-awa ang console)</span>
+                </p>
+            </div>
+
+            <!-- 2. Mesh Network 'Safe-T-Net' Simulation -->
+            <div class="p-4 bg-gray-900 depth-card rounded-xl space-y-3 border-l-4 border-blue-500">
+                <h3 class="flex items-center text-xl font-bold text-blue-500">
+                    <i data-lucide="users-2" class="w-6 h-6 mr-2"></i>
+                    <span class="lang-en">Mesh Network 'Safe-T-Net'</span>
+                    <span class="lang-ceb hidden">Mesh Network 'Safe-T-Net'</span>
+                </h3>
+                <p class="text-sm text-gray-400 lang-en">Exchange short, structured messages peer-to-peer when networks fail (Simulates Bluetooth/Wi-Fi Direct P2P).</p>
+                <p class="text-sm text-gray-400 lang-ceb hidden">Pagbinayloay og mugbo nga mensahe sa laing app user kung mapakyas ang network (P2P Simulation).</p>
+                
+                <select id="mesh-status-select" class="w-full p-3 border border-gray-700 rounded-lg focus:ring-orange-500 focus:border-orange-500 bg-gray-800 text-white text-sm">
+                    <option value="" disabled selected class="lang-en">Select Status</option>
+                    <option value="" disabled selected class="lang-ceb hidden">Pili-a ang Status</option>
+
+                    <option value="Safe_Loc" class="lang-en">Safe at Location</option>
+                    <option value="Safe_Loc" class="lang-ceb hidden">Luwas sa Lokasyon</option>
+
+                    <option value="Minor_Inj" class="lang-en">Minor Injury, Need First Aid</option>
+                    <option value="Minor_Inj" class="lang-ceb hidden">Gamay nga Samad, Kinahanglan First Aid</option>
+                    
+                    <option value="Resource_W" class="lang-en">Need Water/Food</option>
+                    <option value="Resource_W" class="lang-ceb hidden">Kinahanglan Tubig/Pagkaon</option>
+                    
+                    <option value="Resource_M" class="lang-en">Need Medicine/Specific Supplies</option>
+                    <option value="Resource_M" class="lang-ceb hidden">Kinahanglan Tambal/Espesipikong Gamit</option>
+                    
+                </select>
+
+                <textarea id="mesh-message-text" rows="3" placeholder="Add short details (e.g., 'At mango tree', 'Need insulin'). 50 char max." 
+                          maxlength="50" class="w-full p-3 border border-gray-700 rounded-lg focus:ring-orange-500 focus:border-orange-500 text-sm bg-gray-800 text-white lang-en"></textarea>
+                <textarea id="mesh-message-text-ceb" rows="3" placeholder="Idugang ang mugbo nga detalye (pananglitan, 'Sa punoan sa mangga'). 50 char max." 
+                          maxlength="50" class="w-full p-3 border border-gray-700 rounded-lg focus:ring-orange-500 focus:border-orange-500 text-sm bg-gray-800 text-white hidden lang-ceb"></textarea>
+
+                <button id="send-mesh-message-btn" class="w-full py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition duration-200 active:scale-95">
+                    <span class="lang-en">Send Safe-T-Net Message</span>
+                    <span class="lang-ceb hidden">Ipadala ang Safe-T-Net nga Mensahe</span>
+                </button>
+                <p id="mesh-status" class="pt-2 text-blue-400 font-medium text-sm text-center hidden">
+                    <span class="lang-en">Message prepared for mesh relay! (See console for mock payload)</span>
+                    <span class="lang-ceb hidden">Andam na ang mensahe para sa mesh relay!</span>
+                </p>
+            </div>
+        </section>
+
+
+        <!-- EMERGENCY HOTLINES -->
+        <section id="tab-hotlines" class="tab-content hidden space-y-6">
+            <h2 class="text-3xl font-extrabold text-gray-100 mb-6 lang-en">Cebu Emergency Hotlines</h2>
+            <h2 class="text-3xl font-extrabold text-gray-100 mb-6 lang-ceb hidden">Mga Hotline sa Emerhensiya sa Cebu</h2>
+
+            <!-- Hotline List -->
+            <div id="hotline-list" class="space-y-4">
+                <!-- Data will be populated by JS for language toggle -->
+            </div>
+            <p class="text-sm text-center text-red-400 mt-6 lang-en">These numbers are stored offline. Click to call.</p>
+            <p class="text-sm text-center text-red-400 mt-6 lang-ceb hidden">Kini nga mga numero na-save offline. I-click para motawag.</p>
+        </section>
+
+    </main>
+
+    <!-- Navigation Bar -->
+    <nav class="sticky bottom-0 bg-black border-t border-gray-700 grid grid-cols-4 shadow-2xl z-10">
+        <button data-tab="guide" class="nav-tab py-3 px-1 text-gray-400 hover:text-orange-400 transition duration-200 border-t-4 border-transparent flex flex-col items-center text-xs">
+            <i data-lucide="book-open-text" class="w-5 h-5"></i>
+            <span class="lang-en block">Guide</span>
+            <span class="lang-ceb hidden">Giya</span>
+        </button>
+        <button data-tab="toolkit" class="nav-tab py-3 px-1 text-gray-400 hover:text-orange-400 transition duration-200 border-t-4 border-transparent flex flex-col items-center text-xs">
+            <i data-lucide="hard-hat" class="w-5 h-5"></i>
+            <span class="lang-en block">Toolkit</span>
+            <span class="lang-ceb hidden">Gamit</span>
+        </button>
+        <button data-tab="comms" class="nav-tab py-3 px-1 text-gray-400 hover:text-orange-400 transition duration-200 border-t-4 border-transparent flex flex-col items-center text-xs">
+            <i data-lucide="wifi" class="w-5 h-5"></i>
+            <span class="lang-en block">Comms</span>
+            <span class="lang-ceb hidden">Konek</span>
+        </button>
+        <button data-tab="hotlines" class="nav-tab py-3 px-1 text-gray-400 hover:text-orange-400 transition duration-200 border-t-4 border-transparent flex flex-col items-center text-xs">
+            <i data-lucide="phone-call" class="w-5 h-5"></i>
+            <span class="lang-en block">Hotlines</span>
+            <span class="lang-ceb hidden">Hotlines</span>
+        </button>
+    </nav>
+
+    <!-- Full Screen Overlay for Flashlight/Siren/SOS -->
+    <div id="overlay" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-white">
+        <!-- Content injected dynamically by JS -->
+    </div>
+
+    <!-- JavaScript Logic -->
+    <script>
+        // Initialize Lucide Icons
+        lucide.createIcons();
+
+        // --- GLOBAL STATE & DOM REFERENCES ---
+        let currentLang = 'en';
+        const DOM = {
+            body: document.body,
+            langToggle: document.getElementById('lang-toggle'),
+            tabs: {
+                guide: document.getElementById('tab-guide'),
+                toolkit: document.getElementById('tab-toolkit'),
+                comms: document.getElementById('tab-comms'), // UPDATED from notes
+                hotlines: document.getElementById('tab-hotlines'),
+            },
+            navButtons: document.querySelectorAll('.nav-tab'),
+            overlay: document.getElementById('overlay'),
+            flashlightToggle: document.getElementById('toggle-flashlight'),
+            sirenToggle: document.getElementById('toggle-siren'),
+            sosToggle: document.getElementById('toggle-sos'),
+            
+            // New Comms Module DOM elements
+            microPacketBtns: document.querySelectorAll('.micro-packet-btn'),
+            microPacketStatus: document.getElementById('micro-packet-status'),
+            meshStatusSelect: document.getElementById('mesh-status-select'),
+            meshMessageTextEn: document.getElementById('mesh-message-text'),
+            meshMessageTextCeb: document.getElementById('mesh-message-text-ceb'),
+            sendMeshMessageBtn: document.getElementById('send-mesh-message-btn'),
+            meshStatus: document.getElementById('mesh-status'),
+            
+            hotlineList: document.getElementById('hotline-list'),
+            mainContent: document.querySelector('main')
+        };
+
+        // --- LANGUAGE DATA ---
+        const LANGUAGES = {
+            en: 'English',
+            ceb: 'Cebuano'
+        };
+
+        // --- EMERGENCY HOTLINES DATA (Offline Static Data) ---
+        const HOTLINES = [
+            { name: { en: "Emergency (National)", ceb: "Emerhensiya (Nasyonal)" }, number: "911", color: "red" },
+            { name: { en: "Police (Cebu City)", ceb: "Pulis (Dakbayan sa Cebu)" }, number: "166", color: "blue" },
+            { name: { en: "Fire Department", ceb: "BOMBERO" }, number: "(032) 254-2070", color: "red" },
+            { name: { en: "Philippine Red Cross (Cebu)", ceb: "Philippine Red Cross (Cebu)" }, number: "(032) 253-9793", color: "red" },
+            { name: { en: "CDRRMO (Cebu City Disaster Office)", ceb: "CDRRMO" }, number: "262-1424", color: "yellow" },
+            { name: { en: "VICO (Vicente Sotto Memorial Medical Center)", ceb: "VICO Hospital" }, number: "(032) 253-9891", color: "green" },
+        ];
+
+
+        // --- UTILITY FUNCTIONS ---
+
+        /** Toggles all visible text elements between English and Cebuano. */
+        function toggleLanguage() {
+            currentLang = (currentLang === 'en') ? 'ceb' : 'en';
+            DOM.langToggle.textContent = LANGUAGES[currentLang];
+
+            document.querySelectorAll('.lang-en').forEach(el => el.classList.toggle('hidden', currentLang !== 'en'));
+            document.querySelectorAll('.lang-ceb').forEach(el => el.classList.toggle('hidden', currentLang !== 'ceb'));
+
+            // Update placeholder text manually for dual Comms inputs
+            DOM.meshMessageTextEn.classList.toggle('hidden', currentLang !== 'en');
+            DOM.meshMessageTextCeb.classList.toggle('hidden', currentLang !== 'ceb');
+
+            // Update the display for saved location (no longer needed, but keep if structure relies on it)
+            // displaySavedLocation(); 
+            renderHotlines();
+            
+            // Re-label active tool buttons if any are active, updating for dark theme active color (bg-gray-700)
+            if (isFlashlightOn) {
+                DOM.flashlightToggle.innerHTML = `<i data-lucide="lightbulb" class="w-6 h-6 mr-2"></i><span class="lang-en ${currentLang === 'ceb' ? 'hidden' : ''}">Turn Off Light</span><span class="lang-ceb ${currentLang === 'en' ? 'hidden' : ''}">I-patay ang Sulo</span>`;
+                lucide.createIcons();
+                DOM.flashlightToggle.classList.replace('bg-yellow-500', 'bg-gray-700');
+            } else {
+                 DOM.flashlightToggle.innerHTML = `<i data-lucide="lightbulb" class="w-6 h-6 mr-2"></i><span class="lang-en ${currentLang === 'ceb' ? 'hidden' : ''}">Activate Light</span><span class="lang-ceb ${currentLang === 'en' ? 'hidden' : ''}">I-aktibo ang Sulo</span>`;
+                 lucide.createIcons();
+                 DOM.flashlightToggle.classList.replace('bg-gray-700', 'bg-yellow-500');
+            }
+            if (isSirenOn) {
+                DOM.sirenToggle.innerHTML = `<i data-lucide="volume-2" class="w-6 h-6 mr-2"></i><span class="lang-en ${currentLang === 'ceb' ? 'hidden' : ''}">Stop Siren & Flash</span><span class="lang-ceb ${currentLang === 'en' ? 'hidden' : ''}">Hunonga ang Sirena ug Flash</span>`;
+                lucide.createIcons();
+                DOM.sirenToggle.classList.replace('bg-red-600', 'bg-gray-700');
+            } else {
+                 DOM.sirenToggle.innerHTML = `<i data-lucide="volume-2" class="w-6 h-6 mr-2"></i><span class="lang-en ${currentLang === 'ceb' ? 'hidden' : ''}">Start Siren & Flash</span><span class="lang-ceb ${currentLang === 'en' ? 'hidden' : ''}">Sugdi ang Sirena ug Flash</span>`;
+                 lucide.createIcons();
+                 DOM.sirenToggle.classList.replace('bg-gray-700', 'bg-red-600');
+            }
+            if (isSOSOn) {
+                DOM.sosToggle.innerHTML = `<i data-lucide="message-square" class="w-6 h-6 mr-2"></i><span class="lang-en ${currentLang === 'ceb' ? 'hidden' : ''}">Stop S.O.S.</span><span class="lang-ceb ${currentLang === 'en' ? 'hidden' : ''}">Hunonga ang S.O.S.</span>`;
+                lucide.createIcons();
+                DOM.sosToggle.classList.replace('bg-blue-600', 'bg-gray-700');
+            } else {
+                 DOM.sosToggle.innerHTML = `<i data-lucide="message-square" class="w-6 h-6 mr-2"></i><span class="lang-en ${currentLang === 'ceb' ? 'hidden' : ''}">Start S.O.S. ( • • • — — — • • • )</span><span class="lang-ceb ${currentLang === 'en' ? 'hidden' : ''}">Sugdi ang S.O.S. ( • • • — — — • • • )</span>`;
+                 lucide.createIcons();
+                 DOM.sosToggle.classList.replace('bg-gray-700', 'bg-blue-600');
+            }
+
+            // If an overlay is active, re-render its content for language
+            if (!DOM.overlay.classList.contains('hidden')) {
+                // Determine which tool is active and simulate a re-activation to update text
+                if (isFlashlightOn) startFlashlight(true); // Internal re-render
+                else if (isSirenOn) startSiren(true); // Internal re-render
+                else if (isSOSOn) startSOS(true); // Internal re-render
+            }
+        }
+
+        /** Handles navigation between main tabs. */
+        function navigateTo(tabName) {
+            Object.values(DOM.tabs).forEach(tab => tab.classList.add('hidden'));
+            DOM.tabs[tabName].classList.remove('hidden');
+
+            DOM.navButtons.forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.dataset.tab === tabName) {
+                    btn.classList.add('active');
+                }
+            });
+            // Scroll to the top of the main content when navigating
+            DOM.mainContent.scrollTop = 0; 
+        }
+
+        /** Renders the emergency hotlines list dynamically. */
+        function renderHotlines() {
+            DOM.hotlineList.innerHTML = HOTLINES.map(h => `
+                <div class="flex items-center justify-between p-4 bg-gray-900 rounded-xl shadow-lg border-l-8 border-${h.color}-600 depth-card transition hover:scale-[1.01]">
+                    <div>
+                        <p class="font-bold text-lg text-gray-100">${h.name[currentLang]}</p>
+                        <p class="text-gray-400 text-sm">${h.number}</p>
+                    </div>
+                    <a href="tel:${h.number.replace(/[^0-9+]/g, '')}" class="py-2 px-4 bg-green-600 text-white font-semibold rounded-full text-sm transition duration-200 hover:bg-green-700 active:scale-95">
+                        <span class="lang-en ${currentLang === 'ceb' ? 'hidden' : ''}">Call Now</span>
+                        <span class="lang-ceb ${currentLang === 'en' ? 'hidden' : ''}">Tawag Karon</span>
+                    </a>
+                </div>
+            `).join('');
+            // Manually update the language class on the Call Now button spans (needed because map is static)
+            document.querySelectorAll('#hotline-list a').forEach(a => {
+                 const enSpan = a.querySelector('.lang-en');
+                 const cebSpan = a.querySelector('.lang-ceb');
+                 if (enSpan && cebSpan) {
+                     enSpan.classList.toggle('hidden', currentLang !== 'en');
+                     cebSpan.classList.toggle('hidden', currentLang !== 'ceb');
+                 }
+            });
+        }
+
+        /** Manages the full-screen overlay (used for flashlight, siren, SOS). */
+        function showOverlay(backgroundColor, messageKey, messageColor = 'text-white') {
+            const message = currentLang === 'en' 
+                ? (messageKey === 'flashlight' ? 'SCREEN FLASHLIGHT ACTIVE' : (messageKey === 'siren' ? 'DISTRESS SIREN ACTIVE' : 'SOS SIGNAL ACTIVE'))
+                : (messageKey === 'flashlight' ? 'SULO SA SCREEN NAKA-AKTUBO' : (messageKey === 'siren' ? 'SIRENA SA KALISUD NAKA-AKTUBO' : 'SOS NAKA-AKTUBO'));
+
+            DOM.overlay.style.backgroundColor = backgroundColor;
+            
+            // Inject dynamic content and style it
+            DOM.overlay.innerHTML = `
+                <div class="p-8 text-center" onclick="event.stopPropagation()">
+                    <h1 class="text-4xl sm:text-6xl font-black ${messageColor} mb-8">${message}</h1>
+                    <button class="bg-gray-800 text-white font-bold py-4 px-10 rounded-full shadow-2xl hover:bg-gray-900 transition duration-300 active:scale-95" 
+                            onclick="hideOverlay();">
+                        <span class="lang-en ${currentLang === 'ceb' ? 'hidden' : ''}">TAP TO STOP</span>
+                        <span class="lang-ceb ${currentLang === 'en' ? 'hidden' : ''}">I-TAP PARA HUNONGON</span>
+                    </button>
+                </div>
+            `;
+            // Ensure language is correctly applied to injected content
+            DOM.overlay.querySelector('.lang-en').classList.toggle('hidden', currentLang !== 'en');
+            DOM.overlay.querySelector('.lang-ceb').classList.toggle('hidden', currentLang !== 'ceb');
+
+            DOM.overlay.classList.remove('hidden');
+            
+            // Hide everything else using Tailwind's 'hidden' class
+            document.querySelector('header').classList.add('hidden');
+            document.querySelector('nav').classList.add('hidden');
+            DOM.mainContent.classList.add('hidden');
+
+            DOM.body.classList.add('overflow-hidden');
+        }
+
+        function hideOverlay() {
+            // Stop all active signals first
+            stopFlashlight();
+            stopSiren();
+            stopSOS();
+            
+            DOM.overlay.classList.add('hidden');
+            
+            // Restore UI elements
+            document.querySelector('header').classList.remove('hidden');
+            document.querySelector('nav').classList.remove('hidden');
+            DOM.mainContent.classList.remove('hidden');
+            
+            DOM.body.classList.remove('overflow-hidden');
+            
+            // Clear injected overlay content
+            DOM.overlay.innerHTML = '';
+        }
+
+        // --- TOOLKIT IMPLEMENTATION (Flashlight, Siren, SOS) ---
+        
+        let isFlashlightOn = false;
+
+        function startFlashlight(isRelabeling = false) {
+             if (isFlashlightOn && !isRelabeling) return;
+             isFlashlightOn = true;
+             
+             if (!isRelabeling) {
+                 // Stop others just in case
+                 stopSiren();
+                 stopSOS();
+             }
+
+             showOverlay('white', 'flashlight', 'text-gray-900');
+             
+             // Update button text and color to 'on' state (gray)
+             DOM.flashlightToggle.innerHTML = `<i data-lucide="lightbulb" class="w-6 h-6 mr-2"></i><span class="lang-en ${currentLang === 'ceb' ? 'hidden' : ''}">Turn Off Light</span><span class="lang-ceb ${currentLang === 'en' ? 'hidden' : ''}">I-patay ang Sulo</span>`;
+             lucide.createIcons();
+             DOM.flashlightToggle.classList.replace('bg-yellow-500', 'bg-gray-700');
+        }
+
+        function stopFlashlight() {
+            if (!isFlashlightOn) return;
+            isFlashlightOn = false;
+            
+            // Update button text and color to 'off' state (yellow)
+            DOM.flashlightToggle.innerHTML = `<i data-lucide="lightbulb" class="w-6 h-6 mr-2"></i><span class="lang-en ${currentLang === 'ceb' ? 'hidden' : ''}">Activate Light</span><span class="lang-ceb ${currentLang === 'en' ? 'hidden' : ''}">I-aktibo ang Sulo</span>`;
+            lucide.createIcons();
+            DOM.flashlightToggle.classList.replace('bg-gray-700', 'bg-yellow-500');
+        }
+
+        function toggleFlashlight() {
+            if (isFlashlightOn) {
+                hideOverlay();
+            } else {
+                startFlashlight();
+            }
+        }
+
+
+        let audioContext, oscillator, sirenInterval;
+        let isSirenOn = false;
+        let mediaStream = null;
+        let track = null;
+
+        // Helper function to handle camera flash activation
+        async function startCameraFlash() {
+             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                console.log("Media Devices not supported. Using screen flash fallback.");
+                return false;
+            }
+
+            try {
+                // Request camera stream to access torch/flash
+                mediaStream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        facingMode: 'environment' 
+                    } 
+                });
+                track = mediaStream.getVideoTracks()[0];
+                const capabilities = track.getCapabilities();
+
+                if (capabilities.torch) {
+                    await track.applyConstraints({
+                        advanced: [{ torch: true }]
+                    });
+                    console.log("Camera flash activated.");
+                    return true;
+                } else {
+                    console.log("Torch capability not found. Using screen flash fallback.");
+                    // Clean up stream immediately if no torch is available
+                    track.stop(); 
+                    mediaStream.getTracks().forEach(t => t.stop());
+                    mediaStream = null;
+                    track = null;
+                    return false;
+                }
+            } catch (e) {
+                console.error("Could not access camera for flash:", e);
+                // Clean up stream on error
+                if (mediaStream) {
+                    mediaStream.getTracks().forEach(t => t.stop());
+                    mediaStream = null;
+                    track = null;
+                }
+                return false;
+            }
+        }
+
+        // Helper function to stop camera flash
+        function stopCameraFlash() {
+            if (track) {
+                try {
+                    track.applyConstraints({ advanced: [{ torch: false }] });
+                    track.stop();
+                } catch (e) { 
+                    console.warn("Could not turn off torch or stop track.", e);
+                }
+            }
+            if (mediaStream) {
+                mediaStream.getTracks().forEach(t => t.stop());
+            }
+            mediaStream = null;
+            track = null;
+        }
+
+
+        async function startSiren(isRelabeling = false) {
+            if (isSirenOn && !isRelabeling) return;
+            isSirenOn = true;
+            
+            // Stop others just in case
+            if (!isRelabeling) {
+                stopFlashlight();
+                stopSOS();
+            }
+
+            // Attempt to use camera flash on initial activation or check if it was already active
+            const useCameraFlash = isRelabeling ? (mediaStream !== null) : await startCameraFlash();
+
+            // 1. Audio (Web Audio API for simple tone generation)
+            if (!isRelabeling) {
+                 try {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    oscillator = audioContext.createOscillator();
+                    oscillator.type = 'sine';
+                    // Urgent, high-pitch tone: 800Hz
+                    oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+                    oscillator.connect(audioContext.destination);
+                    oscillator.start();
+                } catch (e) {
+                    console.error('Web Audio API failed to start. Siren audio unavailable.', e);
+                }
+            }
+
+
+            // 2. Screen Flash (Faster, more urgent flash)
+            if (!sirenInterval) {
+                let flashState = 0;
+                sirenInterval = setInterval(() => {
+                    // FIX: Immediate check inside the interval to prevent race conditions 
+                    if (!isSirenOn) {
+                        clearInterval(sirenInterval);
+                        sirenInterval = null;
+                        return;
+                    }
+
+                    if (!useCameraFlash) {
+                         // Only flash the screen if camera flash failed
+                        const sirenColor = flashState % 2 === 0 ? 'rgba(255, 0, 0, 1)' : 'rgba(0, 0, 0, 1)';
+                        showOverlay(sirenColor, 'siren');
+                    } else if (flashState % 2 === 0) {
+                        // If camera flash is on, flash screen Red/Black
+                        showOverlay('rgba(255, 0, 0, 1)', 'siren'); 
+                    } else {
+                         showOverlay('rgba(0, 0, 0, 1)', 'siren');
+                    }
+                    
+                    flashState++;
+                }, 250); // Flash every 250ms
+            } else if (isRelabeling) {
+                // Just re-render the overlay for language update
+                const sirenColor = DOM.overlay.style.backgroundColor;
+                showOverlay(sirenColor, 'siren');
+            }
+            
+            // 3. Vibration (if available, starts only once)
+            if (navigator.vibrate && !isRelabeling) {
+                // Urgent, repeating vibration pattern
+                navigator.vibrate([500, 200, 500, 200, 500]);
+            }
+
+            DOM.sirenToggle.innerHTML = `<i data-lucide="volume-2" class="w-6 h-6 mr-2"></i><span class="lang-en ${currentLang === 'ceb' ? 'hidden' : ''}">Stop Siren & Flash</span><span class="lang-ceb ${currentLang === 'en' ? 'hidden' : ''}">Hunonga ang Sirena ug Flash</span>`;
+            lucide.createIcons();
+            // Use bg-gray-700 for active state on dark theme
+            DOM.sirenToggle.classList.replace('bg-red-600', 'bg-gray-700');
+        }
+
+        function stopSiren() {
+            if (!isSirenOn) return;
+            isSirenOn = false;
+
+            clearInterval(sirenInterval);
+            sirenInterval = null;
+            
+            stopCameraFlash(); // Stop the camera flash
+
+            if (oscillator) {
+                try {
+                    oscillator.stop();
+                    oscillator.disconnect();
+                } catch (e) { /* ignore errors on stopping */ }
+                oscillator = null;
+            }
+            if (audioContext) {
+                try {
+                    // Check if audioContext is running before closing
+                    if (audioContext.state !== 'closed') {
+                         audioContext.close();
+                    }
+                } catch (e) { /* ignore errors on closing */ }
+                audioContext = null;
+            }
+            if (navigator.vibrate) {
+                navigator.vibrate(0);
+            }
+
+            DOM.sirenToggle.innerHTML = `<i data-lucide="volume-2" class="w-6 h-6 mr-2"></i><span class="lang-en ${currentLang === 'ceb' ? 'hidden' : ''}">Start Siren & Flash</span><span class="lang-ceb ${currentLang === 'en' ? 'hidden' : ''}">Sugdi ang Sirena ug Flash</span>`;
+            lucide.createIcons();
+            // Revert to primary button color (red-600)
+            DOM.sirenToggle.classList.replace('bg-gray-700', 'bg-red-600');
+        }
+
+        function toggleSiren() {
+            if (isSirenOn) {
+                hideOverlay();
+            } else {
+                startSiren();
+            }
+        }
+
+        // Morse Code for SOS (Short: 200ms, Long: 600ms, Pause: 200ms)
+        const SOS_PATTERN = [
+            200, 200, 200, 200, 200, 600, // S
+            600, 200, 600, 200, 600, 600, // O
+            200, 200, 200, 200, 200, 1000, // S (Long pause after one sequence)
+        ];
+        let sosTimeout;
+        let isSOSOn = false;
+
+        function startSOS(isRelabeling = false) {
+            if (isSOSOn && !isRelabeling) return;
+            isSOSOn = true;
+            
+            // Stop others just in case
+            if (!isRelabeling) {
+                stopFlashlight();
+                stopSiren();
+            }
+
+            let patternIndex = 0;
+
+            const executePattern = () => {
+                if (!isSOSOn) {
+                    clearTimeout(sosTimeout);
+                    return;
+                }
+
+                const duration = SOS_PATTERN[patternIndex % SOS_PATTERN.length];
+
+                // Flash white/black
+                if (patternIndex % 2 === 0) {
+                    showOverlay('white', 'sos', 'text-gray-900');
+                } else {
+                    showOverlay('black', 'sos', 'text-white');
+                }
+
+                if (navigator.vibrate && patternIndex % 2 === 0 && !isRelabeling) {
+                     navigator.vibrate(duration);
+                }
+
+                patternIndex = (patternIndex + 1);
+                sosTimeout = setTimeout(executePattern, duration);
+            };
+            
+            // Start the sequence if not just relabeling
+            if (!isRelabeling) {
+                // Start with screen off (black) for the first short flash (dot)
+                showOverlay('black', 'sos', 'text-white'); 
+                executePattern(); 
+            } else {
+                 // If relabeling, re-render the current state
+                 const currentBg = DOM.overlay.style.backgroundColor;
+                 const colorKey = currentBg === 'white' ? 'text-gray-900' : 'text-white';
+                 showOverlay(currentBg, 'sos', colorKey);
+            }
+            
+            DOM.sosToggle.innerHTML = `<i data-lucide="message-square" class="w-6 h-6 mr-2"></i><span class="lang-en ${currentLang === 'ceb' ? 'hidden' : ''}">Stop S.O.S.</span><span class="lang-ceb ${currentLang === 'en' ? 'hidden' : ''}">Hunonga ang S.O.S.</span>`;
+            lucide.createIcons();
+            // Use bg-gray-700 for active state on dark theme
+            DOM.sosToggle.classList.replace('bg-blue-600', 'bg-gray-700');
+        }
+
+        function stopSOS() {
+            if (!isSOSOn) return;
+            isSOSOn = false;
+            clearTimeout(sosTimeout);
+            if (navigator.vibrate) {
+                navigator.vibrate(0);
+            }
+            DOM.sosToggle.innerHTML = `<i data-lucide="message-square" class="w-6 h-6 mr-2"></i><span class="lang-en ${currentLang === 'ceb' ? 'hidden' : ''}">Start S.O.S. ( • • • — — — • • • )</span><span class="lang-ceb ${currentLang === 'en' ? 'hidden' : ''}">Sugdi ang S.O.S. ( • • • — — — • • • )</span>`;
+            lucide.createIcons();
+            // Revert to primary button color (blue-600)
+            DOM.sosToggle.classList.replace('bg-gray-700', 'bg-blue-600');
+        }
+
+        function toggleSOS() {
+            if (isSOSOn) {
+                hideOverlay();
+            } else {
+                startSOS();
+            }
+        }
+        
+        // --- MOCK UTILITY FUNCTIONS ---
+
+        /** Gets user's current GPS location or a mock fallback. */
+        function getGeolocation(callback) {
+            // Options for geolocation attempt (prioritize quick, low-accuracy fix)
+            const geoOptions = { 
+                enableHighAccuracy: false, 
+                timeout: 5000, 
+                maximumAge: 0 
+            };
+            
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        callback({
+                            lat: position.coords.latitude.toFixed(6),
+                            lon: position.coords.longitude.toFixed(6)
+                        });
+                    },
+                    // Geolocation failed. Using mock location. 
+                    (error) => {
+                        // Removed 'error' from log for cleaner console, as it provides minimal info in restricted environments
+                        console.error("Geolocation failed. Using mock location."); 
+                        // Mock location (e.g., Cebu IT Park coordinates)
+                        callback({ lat: '10.334000', lon: '123.905600' }); 
+                    },
+                    geoOptions // Pass options back to the call
+                );
+            } else {
+                console.warn("Geolocation not supported. Using mock location.");
+                // Mock location
+                callback({ lat: '10.334000', lon: '123.905600' });
+            }
+        }
+
+        // --- SMART COMMUNICATION IMPLEMENTATION ---
+        
+        // This function simulates the high-priority, low-bandwidth transmission.
+        function sendMicroPacket(status) {
+            getGeolocation((location) => {
+                // The Micro-Packet is compressed to the essentials
+                const microPacket = {
+                    t: Date.now(),
+                    s: status, // Status: Safe, Help, Trapped (Minimal coding for status)
+                    l: `${location.lat},${location.lon}`, // Compressed location string
+                    u: 'user_A1B2C3D4' // Mock user ID (Real app uses authenticated ID)
+                };
+
+                // MOCK TRANSMISSION LOGIC: Prioritizing this packet
+                console.log(`[MICRO-PACKET] Attempting high-priority transmission via simulated low-bandwidth channel (GPRS/Carrier):`, microPacket);
+                
+                // Show success status
+                DOM.microPacketStatus.classList.remove('hidden');
+                // Update text to reflect current status for clarity
+                DOM.microPacketStatus.querySelector('.lang-en').textContent = `${status} packet sent successfully! (See console)`;
+                DOM.microPacketStatus.querySelector('.lang-ceb').textContent = `${status} packet malampusong napadala! (Tan-awa ang console)`;
+                setTimeout(() => DOM.microPacketStatus.classList.add('hidden'), 3000);
+            });
+        }
+        
+        // This function simulates preparing the message for a local mesh network (Bluetooth/Wi-Fi Direct P2P).
+        function sendMeshMessage() {
+            const status = DOM.meshStatusSelect.value;
+            const detail = currentLang === 'en' ? DOM.meshMessageTextEn.value.trim() : DOM.meshMessageTextCeb.value.trim();
+            
+            if (!status) {
+                // Use a simple custom message instead of alert()
+                DOM.meshStatus.classList.remove('hidden');
+                DOM.meshStatus.style.color = 'red';
+                DOM.meshStatus.querySelector('.lang-en').textContent = 'Error: Please select a status.';
+                DOM.meshStatus.querySelector('.lang-ceb').textContent = 'Sayop: Palihug pagpili og status.';
+                setTimeout(() => DOM.meshStatus.classList.add('hidden'), 3000);
+                return;
+            }
+
+            getGeolocation((location) => {
+                // The Safe-T-Net message is structured for P2P relay
+                const meshMessage = {
+                    t: Date.now(),
+                    status_code: status, // e.g., Safe_Loc, Resource_W
+                    detail: detail.substring(0, 50), // Max 50 chars for efficient relay
+                    location: `${location.lat},${location.lon}`,
+                    sender_id: 'user_A1B2C3D4', // Mock user ID
+                    relay_hops: 0 // Conceptual count of P2P hops
+                };
+
+                // MOCK RELAY LOGIC: Message prepared and waiting for a nearby peer
+                console.log(`[SAFE-T-NET] Message prepared for P2P relay to nearby users:`, meshMessage);
+                
+                // Clear the message box after 'sending'
+                DOM.meshStatusSelect.value = "";
+                DOM.meshMessageTextEn.value = "";
+                DOM.meshMessageTextCeb.value = "";
+
+                // Show success status
+                DOM.meshStatus.style.color = 'var(--tw-colors-blue-400)'; // Reset color
+                DOM.meshStatus.classList.remove('hidden');
+                DOM.meshStatus.querySelector('.lang-en').textContent = 'Message prepared for mesh relay! (See console for mock payload)';
+                DOM.meshStatus.querySelector('.lang-ceb').textContent = 'Andam na ang mensahe para sa mesh relay! (Tan-awa ang console)';
+                setTimeout(() => DOM.meshStatus.classList.add('hidden'), 4000);
+            });
+        }
+
+        // --- INITIALIZATION ---
+
+        function init() {
+            // Initial render of hotlines and language setup
+            renderHotlines();
+            
+            // Language Toggle
+            DOM.langToggle.addEventListener('click', toggleLanguage);
+
+            // Tab Navigation
+            DOM.navButtons.forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    navigateTo(btn.dataset.tab);
+                    // Stop any active tool when switching tabs
+                    hideOverlay();
+                });
+            });
+
+            // Toolkit Handlers
+            DOM.flashlightToggle.addEventListener('click', toggleFlashlight);
+            DOM.sirenToggle.addEventListener('click', toggleSiren);
+            DOM.sosToggle.addEventListener('click', toggleSOS);
+
+            // New Comms Module Handlers
+            DOM.microPacketBtns.forEach(btn => {
+                btn.addEventListener('click', () => sendMicroPacket(btn.dataset.status));
+            });
+            DOM.sendMeshMessageBtn.addEventListener('click', sendMeshMessage);
+
+            // Ensure initial guide tab is styled correctly
+            navigateTo('guide');
+        }
+
+        // Initialize the app on window load
+        window.onload = init;
+
+    </script>
+</body>
+</html>

@@ -282,6 +282,11 @@
             <span class="lang-ceb hidden">Hotlines</span>
         </button>
     </nav>
+    
+    <!-- COPYRIGHT FOOTER -->
+    <footer class="py-2 text-center text-xs text-gray-500 bg-black border-t border-gray-900">
+        &copy; 2025 Noel Timario. All Rights Reserved.
+    </footer>
 
     <!-- Full Screen Overlay for Flashlight/Siren/SOS -->
     <div id="overlay" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-white">
@@ -480,6 +485,7 @@
             // Hide everything else using Tailwind's 'hidden' class
             document.querySelector('header').classList.add('hidden');
             document.querySelector('nav').classList.add('hidden');
+            document.querySelector('footer').classList.add('hidden'); // Hide footer when overlay is active
             DOM.mainContent.classList.add('hidden');
 
             DOM.body.classList.add('overflow-hidden');
@@ -496,6 +502,7 @@
             // Restore UI elements
             document.querySelector('header').classList.remove('hidden');
             document.querySelector('nav').classList.remove('hidden');
+            document.querySelector('footer').classList.remove('hidden'); // Show footer when overlay hides
             DOM.mainContent.classList.remove('hidden');
             
             DOM.body.classList.remove('overflow-hidden');

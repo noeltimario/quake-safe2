@@ -3,957 +3,809 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QuakeSafe - Offline Earthquake Info & Alerts</title>
-    <!-- PWA MANIFEST LINK -->
-    <link rel="manifest" href="data:application/manifest+json;base64,eyJuYW1lIjogIlF1YWtlU2FmZSBDZWJ1Iiwic2hvcnRfbmFtZSI6ICJRdWFrZVNhZmUiLCJzdGFydF91cmwiOiAiLi9zYWZlY2VidV9wd2EuaHRtbCIsImRpc3BsYXkiOiAic3RhbmRhbG9uZSIsImJhY2tncm91bmRfY29sb3IiOiAiIzBhMGEwYSIsInRoZW1lX2NvbG9yIjogIiNmYjkyM2MiLCJpY29ucyI6IFt7InNyYyI6ICJodHRwczovL3BsYWNlaG9sZC5jby8xOTJ4MTkyLzBhMGEwYS9mYjkyM2M/dGV4dD1RVSIsInNpemVzIjogIjE5MngxOTIiLCJ0eXBlIjogImltYWdlL3BuZyJ9LHsic3JjIjogImh0dHBzOi8vcGxhY2Vob2xkLmNvLzUxMng1MTIvMGEwYTBhL2ZiOTIzYz90ZXh0PVFVIiwic2l6ZXMiOiAiNTEyeDUxMiIsInR5cGUiOiAiaW1hZ2UvcG5nIn1dfQ==">
-    
+    <title>4D Barangay eBlotter System</title>
     <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Load Lucide Icons -->
-    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <!-- Load Three.js for 4D Background Effect -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- Load Firebase libraries -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where, serverTimestamp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Global variables provided by the environment
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        let app, db, auth;
+        let unsubscribeBlotters = null;
+        let currentUserId = null;
+
+        // Make Firebase objects globally accessible for the main script
+        window.firebaseApp = {};
+
+        // Helper for error messages
+        window.showError = (message) => {
+            document.getElementById('toast-message').textContent = message;
+            document.getElementById('error-toast').classList.remove('hidden');
+            setTimeout(() => {
+                document.getElementById('error-toast').classList.add('hidden');
+            }, 5000);
+        };
+
+        // Initialize Firebase and Authentication
+        const initFirebase = async () => {
+            try {
+                // setLogLevel('debug'); // Uncomment for verbose Firestore logging
+                app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                
+                // Expose to global scope for use in non-module script
+                window.firebaseApp.db = db;
+
+                // Sign in using the custom token or anonymously if not available
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        currentUserId = user.uid;
+                        window.firebaseApp.userId = currentUserId;
+                        document.getElementById('user-id-display').textContent = `User ID: ${currentUserId}`;
+                        document.getElementById('main-app').classList.remove('opacity-0');
+                        
+                        // Start real-time data listener only after auth is ready
+                        window.startBlotterListener(db, appId, currentUserId);
+                    } else {
+                        showError("Authentication failed. Please check connection.");
+                    }
+                });
+
+            } catch (error) {
+                console.error("Error during Firebase initialization:", error);
+                showError("Failed to initialize system: " + error.message);
+            }
+        };
+
+        // Expose Firebase Firestore functions to the global scope
+        window.firebaseApp.firestore = {
+            doc, getDoc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where, serverTimestamp
+        };
+
+        // This function will be called from the main script to start listening to data
+        window.startBlotterListener = (dbInstance, appId, userId) => {
+            if (unsubscribeBlotters) {
+                unsubscribeBlotters();
+            }
+
+            // Public Data Path: /artifacts/{appId}/public/data/blotterRecords
+            const blotterCollectionRef = collection(dbInstance, 'artifacts', appId, 'public', 'data', 'blotterRecords');
+            
+            // Set up real-time listener
+            const q = query(blotterCollectionRef);
+
+            unsubscribeBlotters = onSnapshot(q, (snapshot) => {
+                const blotters = snapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }));
+                // Call the main JS function to update the UI
+                window.handleBlotterUpdate(blotters, userId);
+            }, (error) => {
+                console.error("Firestore snapshot error:", error);
+                showError("Real-time data error: " + error.message);
+            });
+        };
+
+        initFirebase();
+    </script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #0a0a0a; /* Very dark background */
+            background-color: #0d111c; /* Dark blue background */
+            color: #e5e7eb;
+            overflow: hidden; /* Hide scrollbar for immersive background */
         }
-        /* Custom scrolling for better mobile feel */
-        .scrollable-content {
-            -webkit-overflow-scrolling: touch;
+        #three-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            opacity: 0.2; /* Subtly dim the 3D effect */
         }
-        /* Enhanced Card Depth */
-        .depth-card {
-            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.4), 0 6px 6px rgba(0, 0, 0, 0.2);
-            transition: transform 0.2s ease-out, box-shadow 0.2s ease-out;
-            border: 1px solid #1f1f1f; /* subtle border */
+        .app-content {
+            position: relative;
+            z-index: 10;
+            min-height: 100vh;
+            padding: 2rem;
+            overflow-y: auto; /* Allow scrolling within the content area */
         }
-        /* Flash/Siren/SOS Overlay transition for dramatic effect */
-        #overlay {
-            transition: background-color 0.2s linear;
+        /* Custom scrollbar for better visual integration */
+        .app-content::-webkit-scrollbar {
+            width: 8px;
         }
-        
-        /* Make the active tab visually distinct on the bottom border */
-        .nav-tab.active {
-            border-top-color: #fb923c; /* orange-400 */
-            color: #fb923c;
+        .app-content::-webkit-scrollbar-thumb {
+            background-color: #4f46e5;
+            border-radius: 4px;
+        }
+        .app-content::-webkit-scrollbar-track {
+            background: #1f2937;
         }
     </style>
-
 </head>
-<body class="min-h-screen flex flex-col">
+<body>
 
-    <!-- Tailwind JIT Class Inclusion Fix: Ensures dynamic colors for hotlines are available -->
-    <div class="hidden border-red-600 border-blue-600 border-yellow-600 border-green-600"></div>
+    <!-- Three.js 4D Background Container -->
+    <div id="three-container"></div>
 
-    <!-- Language & Header -->
-    <header class="sticky top-0 bg-black shadow-2xl p-4 flex justify-between items-center z-10 border-b border-gray-800">
-        <h1 class="text-2xl font-black text-white tracking-wider">Quake<span class="text-orange-400">Safe</span></h1>
-        <button id="lang-toggle" class="p-2 bg-orange-600 text-white rounded-full text-xs font-semibold shadow-lg hover:bg-orange-700 transition duration-200 active:scale-95">
-            Cebuano
-        </button>
-    </header>
+    <!-- Main Application Content -->
+    <div id="main-app" class="app-content transition-opacity duration-500 opacity-0">
+        <header class="text-center mb-10 p-4 rounded-xl bg-gray-800/80 backdrop-blur-sm shadow-2xl">
+            <h1 class="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-500">
+                Barangay eBlotter System
+            </h1>
+            <p class="text-sm text-gray-400 mt-2">Responsive & Real-time Case Management Interface</p>
+        </header>
 
-    <!-- Main Content Area (Tabs) -->
-    <main class="flex-grow scrollable-content overflow-y-auto p-4 md:p-6">
-        <!-- SAFETY GUIDE (Default View) -->
-        <section id="tab-guide" class="tab-content space-y-6">
-            <h2 class="text-3xl font-extrabold text-gray-100 mb-6 lang-en">Earthquake Safety Guide</h2>
-            <h2 class="text-3xl font-extrabold text-gray-100 mb-6 lang-ceb hidden">Giya sa Kaligtasan sa Linog</h2>
-
-            <!-- Before -->
-            <div class="bg-gray-900 depth-card p-4 rounded-xl border-l-4 border-blue-400">
-                <h3 class="flex items-center text-xl font-bold text-blue-400 mb-3">
-                    <i data-lucide="shield-check" class="w-6 h-6 mr-2"></i>
-                    <span class="lang-en">Before (Preparation)</span>
-                    <span class="lang-ceb hidden">Sa Dili Pa (Pag-andam)</span>
-                </h3>
-                <ul class="list-disc pl-5 text-gray-300 space-y-2">
-                    <li class="lang-en">Secure heavy items (cabinets, shelves) to the wall.</li>
-                    <li class="lang-ceb hidden">Siguroha ang bug-at nga mga butang (aparador, estante) sa dingding.</li>
-                    <li class="lang-en">Prepare a Go-Bag with water, food, first aid, and copies of IDs.</li>
-                    <li class="lang-ceb hidden">Pag-andam og Go-Bag nga adunay tubig, pagkaon, first aid, ug mga kopya sa ID.</li>
-                    <li class="lang-en">Identify safe spots (under sturdy tables) and danger zones (near windows).</li>
-                    <li class="lang-ceb hidden">Ilha ang luwas nga mga dapit ug mga delikado nga lugar (duol sa bintana).</li>
-                </ul>
-            </div>
-
-            <!-- During -->
-            <div class="bg-gray-900 depth-card p-4 rounded-xl border-l-4 border-red-500">
-                <h3 class="flex items-center text-xl font-bold text-red-500 mb-3">
-                    <i data-lucide="alert-triangle" class="w-6 h-6 mr-2"></i>
-                    <span class="lang-en">During (Action)</span>
-                    <span class="lang-ceb hidden">Panahon sa (Aksyon)</span>
-                </h3>
-                <p class="text-3xl font-black text-red-400 text-center my-4 p-2 bg-gray-800 rounded-lg">
-                    <span class="lang-en">DROP, COVER, HOLD ON!</span>
-                    <span class="lang-ceb hidden">DUKO, TABON, HUPOT!</span>
-                </p>
-                <ul class="list-disc pl-5 text-gray-300 space-y-2">
-                    <li class="lang-en">If indoors, stay inside. Move to a safe spot.</li>
-                    <li class="lang-ceb hidden">Kung naa sa sulod, magpabilin sa sulod. Balhin sa luwas nga dapit.</li>
-                    <li class="lang-en">Stay away from glass, exterior walls, and falling objects.</li>
-                    <li class="lang-ceb hidden">Palayo sa bildo, bungbong, ug mga butang nga mahulog.</li>
-                    <li class="lang-en">If in a vehicle, stop and stay inside.</li>
-                    <li class="lang-ceb hidden">Kung naa sa sakyanan, hunong ug magpabilin sa sulod.</li>
-                </ul>
-            </div>
-
-            <!-- After -->
-            <div class="bg-gray-900 depth-card p-4 rounded-xl border-l-4 border-green-400">
-                <h3 class="flex items-center text-xl font-bold text-green-400 mb-3">
-                    <i data-lucide="hand-heart" class="w-6 h-6 mr-2"></i>
-                    <span class="lang-en">After (Recovery)</span>
-                    <span class="lang-ceb hidden">Pagkahuman (Pagbawi)</span>
-                </h3>
-                <ul class="list-disc pl-5 text-gray-300 space-y-2">
-                    <li class="lang-en">Check yourself and others for injuries. Give first aid.</li>
-                    <li class="lang-ceb hidden">Susiha ang imong kaugalingon ug ang uban alang sa kadaot. Hatagi og first aid.</li>
-                    <li class="lang-en">Expect aftershocks. Be ready to Duko, Tabon, Hupot again.</li>
-                    <li class="lang-ceb hidden">Paghulat sa aftershocks. Pag-andam sa Duko, Tabon, Hupot pag-usab.</li>
-                    <li class="lang-en">Avoid damaged areas. Use stairs, not elevators.</li>
-                    <li class="lang-ceb hidden">Likayi ang nadaot nga mga lugar. Gamita ang hagdanan, dili elevator.</li>
-                </ul>
-            </div>
-        </section>
-
-        <!-- EMERGENCY TOOLKIT -->
-        <section id="tab-toolkit" class="tab-content hidden space-y-6">
-            <h2 class="text-3xl font-extrabold text-gray-100 mb-6 lang-en">Emergency Toolkit (High Impact)</h2>
-            <h2 class="text-3xl font-extrabold text-gray-100 mb-6 lang-ceb hidden">Mga Gamit sa Emerhensiya (Taas nga Epekto)</h2>
-
-            <!-- Flashlight (Screen) -->
-            <div class="p-4 bg-gray-900 depth-card rounded-xl text-center">
-                <h3 class="text-xl font-bold text-gray-100 mb-4 lang-en">Screen Flashlight</h3>
-                <h3 class="text-xl font-bold text-gray-100 mb-4 lang-ceb hidden">Sulo sa Screen</h3>
-                <button id="toggle-flashlight" class="w-full py-4 px-6 bg-yellow-500 text-gray-900 font-black text-xl rounded-xl shadow-xl hover:bg-yellow-600 transition duration-300 active:scale-[0.98] flex items-center justify-center">
-                    <i data-lucide="lightbulb" class="w-6 h-6 mr-2"></i>
-                    <span class="lang-en">Activate Light</span>
-                    <span class="lang-ceb hidden">I-aktibo ang Sulo</span>
-                </button>
-                <p class="mt-2 text-sm text-gray-400 lang-en">Fills the screen with bright white light for visibility.</p>
-                <p class="mt-2 text-sm text-gray-400 lang-ceb hidden">Pun-on ang screen sa hayag nga puti nga suga alang sa visibility.</p>
-            </div>
-
-            <!-- Siren Alarm -->
-            <div class="p-4 bg-gray-900 depth-card rounded-xl text-center">
-                <h3 class="text-xl font-bold text-gray-100 mb-4 lang-en">Distress Siren Alarm</h3>
-                <h3 class="text-xl font-bold text-gray-100 mb-4 lang-ceb hidden">Sirena sa Kalisud</h3>
-                <button id="toggle-siren" class="w-full py-4 px-6 bg-red-600 text-white font-black text-xl rounded-xl shadow-xl hover:bg-red-700 transition duration-300 active:scale-[0.98] flex items-center justify-center">
-                    <i data-lucide="volume-2" class="w-6 h-6 mr-2"></i>
-                    <span class="lang-en">Start Siren & Flash</span>
-                    <span class="lang-ceb hidden">Sugdi ang Sirena ug Flash</span>
-                </button>
-                <p class="mt-2 text-sm text-gray-400 lang-en">Plays a loud tone and flashes the device light (if available) + screen flash.</p>
-                <p class="mt-2 text-sm text-gray-400 lang-ceb hidden">Patukar og kusog nga tono ug i-flash ang suga sa device (kung anaa) + screen flash.</p>
-            </div>
-
-            <!-- SOS Signal -->
-            <div class="p-4 bg-gray-900 depth-card rounded-xl text-center">
-                <h3 class="text-xl font-bold text-gray-100 mb-4 lang-en">SOS Screen Signal</h3>
-                <h3 class="text-xl font-bold text-gray-100 mb-4 lang-ceb hidden">Signal SOS sa Screen</h3>
-                <button id="toggle-sos" class="w-full py-4 px-6 bg-blue-600 text-white font-black text-xl rounded-xl shadow-xl hover:bg-blue-700 transition duration-300 active:scale-[0.98] flex items-center justify-center">
-                    <i data-lucide="message-square" class="w-6 h-6 mr-2"></i>
-                    <span class="lang-en">Start S.O.S. ( • • • — — — • • • )</span>
-                    <span class="lang-ceb hidden">Sugdi ang S.O.S. ( • • • — — — • • • )</span>
-                </button>
-                <p class="mt-2 text-sm text-gray-400 lang-en">Flashes the screen in the Morse code pattern for S.O.S. (White/Black).</p>
-                <p class="mt-2 text-sm text-gray-400 lang-ceb hidden">I-flash ang screen sa Morse code pattern sa S.O.S. (Puti/Itom).</p>
-            </div>
-        </section>
-
-        <!-- SMART COMMUNICATION & CONNECTIVITY MODULE -->
-        <section id="tab-comms" class="tab-content hidden space-y-6">
-            <h2 class="text-3xl font-extrabold text-gray-100 mb-6 lang-en">Smart Communication & Connectivity</h2>
-            <h2 class="text-3xl font-extrabold text-gray-100 mb-6 lang-ceb hidden">Smart nga Komunikasyon & Koneksyon</h2>
-            
-            <!-- 1. Low-Bandwidth Micro-Packet Protocol -->
-            <div class="p-4 bg-gray-900 depth-card rounded-xl space-y-4 border-l-4 border-red-500">
-                <h3 class="flex items-center text-xl font-bold text-red-500">
-                    <i data-lucide="zap" class="w-6 h-6 mr-2"></i>
-                    <span class="lang-en">Priority Micro-Packet Protocol</span>
-                    <span class="lang-ceb hidden">Priority Micro-Packet Protocol</span>
-                </h3>
-                <p class="text-sm text-gray-400 lang-en">Transmit essential status (GPS + one code) using minimal data, prioritizing connection success over speed (Simulates GPRS/Low-Bandwidth).</p>
-                <p class="text-sm text-gray-400 lang-ceb hidden">Ipadala ang importante nga status gamit ang gamay nga data, i-una ang kalampusan sa koneksyon (GPRS Simulation).</p>
-
-                <div class="grid grid-cols-3 gap-2">
-                    <button data-status="Safe" class="micro-packet-btn py-3 bg-green-600 text-white font-black rounded-lg shadow-md hover:bg-green-700 transition active:scale-95">
-                        <i data-lucide="check-circle" class="w-5 h-5 mx-auto mb-1"></i>
-                        <span class="lang-en text-xs">SAFE</span>
-                        <span class="lang-ceb hidden text-xs">LUWAS</span>
-                    </button>
-                    <button data-status="Help" class="micro-packet-btn py-3 bg-yellow-600 text-white font-black rounded-lg shadow-md hover:bg-yellow-700 transition active:scale-95">
-                        <i data-lucide="hand" class="w-5 h-5 mx-auto mb-1"></i>
-                        <span class="lang-en text-xs">NEED HELP</span>
-                        <span class="lang-ceb hidden text-xs">KINAHANGLAN TABANG</span>
-                    </button>
-                    <button data-status="Trapped" class="micro-packet-btn py-3 bg-red-700 text-white font-black rounded-lg shadow-md hover:bg-red-800 transition active:scale-95">
-                        <i data-lucide="x-octagon" class="w-5 h-5 mx-auto mb-1"></i>
-                        <span class="lang-en text-xs">TRAPPED</span>
-                        <span class="lang-ceb hidden text-xs">NA-TRAP</span>
-                    </button>
-                </div>
-                <p id="micro-packet-status" class="pt-2 text-green-400 font-medium text-sm text-center hidden">
-                    <span class="lang-en">Status packet sent successfully! (See console)</span>
-                    <span class="lang-ceb hidden">Malampusong napadala ang status packet! (Tan-awa ang console)</span>
-                </p>
-            </div>
-
-            <!-- 2. Mesh Network 'Safe-T-Net' Simulation -->
-            <div class="p-4 bg-gray-900 depth-card rounded-xl space-y-3 border-l-4 border-blue-500">
-                <h3 class="flex items-center text-xl font-bold text-blue-500">
-                    <i data-lucide="users-2" class="w-6 h-6 mr-2"></i>
-                    <span class="lang-en">Mesh Network 'Safe-T-Net'</span>
-                    <span class="lang-ceb hidden">Mesh Network 'Safe-T-Net'</span>
-                </h3>
-                <p class="text-sm text-gray-400 lang-en">Exchange short, structured messages peer-to-peer when networks fail (Simulates Bluetooth/Wi-Fi Direct P2P).</p>
-                <p class="text-sm text-gray-400 lang-ceb hidden">Pagbinayloay og mugbo nga mensahe sa laing app user kung mapakyas ang network (P2P Simulation).</p>
-                
-                <select id="mesh-status-select" class="w-full p-3 border border-gray-700 rounded-lg focus:ring-orange-500 focus:border-orange-500 bg-gray-800 text-white text-sm">
-                    <option value="" disabled selected class="lang-en">Select Status</option>
-                    <option value="" disabled selected class="lang-ceb hidden">Pili-a ang Status</option>
-
-                    <option value="Safe_Loc" class="lang-en">Safe at Location</option>
-                    <option value="Safe_Loc" class="lang-ceb hidden">Luwas sa Lokasyon</option>
-
-                    <option value="Minor_Inj" class="lang-en">Minor Injury, Need First Aid</option>
-                    <option value="Minor_Inj" class="lang-ceb hidden">Gamay nga Samad, Kinahanglan First Aid</option>
-                    
-                    <option value="Resource_W" class="lang-en">Need Water/Food</option>
-                    <option value="Resource_W" class="lang-ceb hidden">Kinahanglan Tubig/Pagkaon</option>
-                    
-                    <option value="Resource_M" class="lang-en">Need Medicine/Specific Supplies</option>
-                    <option value="Resource_M" class="lang-ceb hidden">Kinahanglan Tambal/Espesipikong Gamit</option>
-                    
+        <!-- User Role Switcher -->
+        <div class="mb-8 p-4 bg-gray-800/70 rounded-xl shadow-lg flex flex-col md:flex-row items-center justify-between gap-4">
+            <div class="flex-grow">
+                <label for="role-select" class="block text-sm font-medium text-indigo-300 mb-1">Select User Role:</label>
+                <select id="role-select" onchange="switchRole(this.value)" class="w-full md:w-64 p-2 bg-gray-900 border border-indigo-500 rounded-lg text-white shadow-inner focus:ring-indigo-500 focus:border-indigo-500">
+                    <option value="Citizen">Complainant/Citizen</option>
+                    <option value="Staff">Barangay Staff/Secretary</option>
+                    <option value="Admin">System Administrator</option>
+                    <option value="Captain">Barangay Captain/Lupon</option>
                 </select>
-
-                <textarea id="mesh-message-text" rows="3" placeholder="Add short details (e.g., 'At mango tree', 'Need insulin'). 50 char max." 
-                          maxlength="50" class="w-full p-3 border border-gray-700 rounded-lg focus:ring-orange-500 focus:border-orange-500 text-sm bg-gray-800 text-white lang-en"></textarea>
-                <textarea id="mesh-message-text-ceb" rows="3" placeholder="Idugang ang mugbo nga detalye (pananglitan, 'Sa punoan sa mangga'). 50 char max." 
-                          maxlength="50" class="w-full p-3 border border-gray-700 rounded-lg focus:ring-orange-500 focus:border-orange-500 text-sm bg-gray-800 text-white hidden lang-ceb"></textarea>
-
-                <button id="send-mesh-message-btn" class="w-full py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition duration-200 active:scale-95">
-                    <span class="lang-en">Send Safe-T-Net Message</span>
-                    <span class="lang-ceb hidden">Ipadala ang Safe-T-Net nga Mensahe</span>
-                </button>
-                <p id="mesh-status" class="pt-2 text-blue-400 font-medium text-sm text-center hidden">
-                    <span class="lang-en">Message prepared for mesh relay! (See console for mock payload)</span>
-                    <span class="lang-ceb hidden">Andam na ang mensahe para sa mesh relay!</span>
-                </p>
             </div>
-        </section>
+            <div id="user-id-display" class="text-xs text-gray-400 bg-gray-900 p-2 rounded-lg truncate">User ID: N/A</div>
+        </div>
+        
+        <!-- Main Content Area (Role-based views injected here) -->
+        <div id="dashboard-container" class="space-y-6">
+            <!-- Initial content will be loaded by switchRole() -->
+        </div>
 
-
-        <!-- EMERGENCY HOTLINES -->
-        <section id="tab-hotlines" class="tab-content hidden space-y-6">
-            <h2 class="text-3xl font-extrabold text-gray-100 mb-6 lang-en">Cebu Emergency Hotlines</h2>
-            <h2 class="text-3xl font-extrabold text-gray-100 mb-6 lang-ceb hidden">Mga Hotline sa Emerhensiya sa Cebu</h2>
-
-            <!-- Hotline List -->
-            <div id="hotline-list" class="space-y-4">
-                <!-- Data will be populated by JS for language toggle -->
+        <!-- Custom Modal for Notifications/Confirmations (No alert() or confirm()) -->
+        <div id="custom-modal" class="fixed inset-0 bg-black bg-opacity-75 hidden items-center justify-center z-50">
+            <div class="bg-gray-800 p-8 rounded-xl shadow-2xl max-w-sm w-full border border-indigo-600">
+                <h3 id="modal-title" class="text-xl font-bold text-indigo-400 mb-4">Modal Title</h3>
+                <p id="modal-body" class="text-gray-300 mb-6">Modal body content.</p>
+                <div class="flex justify-end gap-3">
+                    <button id="modal-cancel-btn" onclick="closeModal(false)" class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-500 transition duration-150 hidden">Cancel</button>
+                    <button id="modal-confirm-btn" onclick="closeModal(true)" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 transition duration-150">Confirm</button>
+                </div>
             </div>
-            <p class="text-sm text-center text-red-400 mt-6 lang-en">These numbers are stored offline. Click to call.</p>
-            <p class="text-sm text-center text-red-400 mt-6 lang-ceb hidden">Kini nga mga numero na-save offline. I-click para motawag.</p>
-        </section>
+        </div>
 
-    </main>
+        <!-- Custom Error Toast -->
+        <div id="error-toast" class="fixed bottom-4 right-4 hidden bg-red-800 text-white p-4 rounded-lg shadow-2xl z-50 transition duration-300" role="alert">
+            <div class="flex items-center">
+                <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                </svg>
+                <span id="toast-message" class="font-medium">An error occurred.</span>
+            </div>
+        </div>
 
-    <!-- Navigation Bar -->
-    <nav class="sticky bottom-0 bg-black border-t border-gray-700 grid grid-cols-4 shadow-2xl z-10">
-        <button data-tab="guide" class="nav-tab py-3 px-1 text-gray-400 hover:text-orange-400 transition duration-200 border-t-4 border-transparent flex flex-col items-center text-xs">
-            <i data-lucide="book-open-text" class="w-5 h-5"></i>
-            <span class="lang-en block">Guide</span>
-            <span class="lang-ceb hidden">Giya</span>
-        </button>
-        <button data-tab="toolkit" class="nav-tab py-3 px-1 text-gray-400 hover:text-orange-400 transition duration-200 border-t-4 border-transparent flex flex-col items-center text-xs">
-            <i data-lucide="hard-hat" class="w-5 h-5"></i>
-            <span class="lang-en block">Toolkit</span>
-            <span class="lang-ceb hidden">Gamit</span>
-        </button>
-        <button data-tab="comms" class="nav-tab py-3 px-1 text-gray-400 hover:text-orange-400 transition duration-200 border-t-4 border-transparent flex flex-col items-center text-xs">
-            <i data-lucide="wifi" class="w-5 h-5"></i>
-            <span class="lang-en block">Comms</span>
-            <span class="lang-ceb hidden">Konek</span>
-        </button>
-        <button data-tab="hotlines" class="nav-tab py-3 px-1 text-gray-400 hover:text-orange-400 transition duration-200 border-t-4 border-transparent flex flex-col items-center text-xs">
-            <i data-lucide="phone-call" class="w-5 h-5"></i>
-            <span class="lang-en block">Hotlines</span>
-            <span class="lang-ceb hidden">Hotlines</span>
-        </button>
-    </nav>
-    
-    <!-- COPYRIGHT FOOTER -->
-    <footer class="py-2 text-center text-xs text-gray-500 bg-black border-t border-gray-900">
-        &copy; 2025 Noel Timario. All Rights Reserved.
-    </footer>
-
-    <!-- Full Screen Overlay for Flashlight/Siren/SOS -->
-    <div id="overlay" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-white">
-        <!-- Content injected dynamically by JS -->
     </div>
 
-    <!-- JavaScript Logic -->
     <script>
-        // Initialize Lucide Icons
-        lucide.createIcons();
-        
-        // --- PWA SERVICE WORKER REGISTRATION (Essential for 'Add to Home Screen' prompt) ---
-        // This is a minimal registration to fulfill the PWA requirement for installability.
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                // Registering the main HTML file as the scope for simplicity in a single-file app.
-                // Note: Full offline functionality typically requires a separate 'sw.js' file
-                // with install and fetch events for robust caching.
-                navigator.serviceWorker.register('./safecebu_pwa.html', { scope: './' })
-                    .then(registration => {
-                        console.log('PWA Service Worker registered for installability:', registration.scope);
-                    })
-                    .catch(error => {
-                        console.log('PWA Service Worker registration failed (this is often fine):', error);
-                    });
+        // ====================================================================
+        // THREE.JS IMPLEMENTATION (4D BACKGROUND)
+        // ====================================================================
+
+        let scene, camera, renderer, particles, particleSystem;
+
+        function initThree() {
+            const container = document.getElementById('three-container');
+            
+            // Scene Setup
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.z = 5;
+
+            // Renderer Setup
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            container.appendChild(renderer.domElement);
+            
+            // Particle Geometry
+            const particleCount = 1000;
+            particles = new THREE.BufferGeometry();
+            const positions = new Float32Array(particleCount * 3);
+            const colors = new Float32Array(particleCount * 3);
+            const color = new THREE.Color();
+            
+            // Create random particles in a box space
+            for (let i = 0; i < particleCount; i++) {
+                // Position (x, y, z)
+                positions[i * 3 + 0] = (Math.random() - 0.5) * 50;
+                positions[i * 3 + 1] = (Math.random() - 0.5) * 50;
+                positions[i * 3 + 2] = (Math.random() - 0.5) * 50;
+                
+                // Color (subtle purple/indigo gradient)
+                color.setHSL(0.6 + Math.random() * 0.1, 0.7, 0.5); 
+                colors[i * 3 + 0] = color.r;
+                colors[i * 3 + 1] = color.g;
+                colors[i * 3 + 2] = color.b;
+            }
+
+            particles.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            particles.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+            // Particle Material
+            const particleMaterial = new THREE.PointsMaterial({
+                size: 0.05,
+                vertexColors: true,
+                blending: THREE.AdditiveBlending,
+                transparent: true,
+                opacity: 0.8
             });
+
+            // Particle System
+            particleSystem = new THREE.Points(particles, particleMaterial);
+            scene.add(particleSystem);
+
+            window.addEventListener('resize', onWindowResize, false);
         }
 
-
-        // --- GLOBAL STATE & DOM REFERENCES ---
-        let currentLang = 'en';
-        const DOM = {
-            body: document.body,
-            langToggle: document.getElementById('lang-toggle'),
-            tabs: {
-                guide: document.getElementById('tab-guide'),
-                toolkit: document.getElementById('tab-toolkit'),
-                comms: document.getElementById('tab-comms'), 
-                hotlines: document.getElementById('tab-hotlines'),
-            },
-            navButtons: document.querySelectorAll('.nav-tab'),
-            overlay: document.getElementById('overlay'),
-            flashlightToggle: document.getElementById('toggle-flashlight'),
-            sirenToggle: document.getElementById('toggle-siren'),
-            sosToggle: document.getElementById('toggle-sos'),
-            
-            // Comms Module DOM elements
-            microPacketBtns: document.querySelectorAll('.micro-packet-btn'),
-            microPacketStatus: document.getElementById('micro-packet-status'),
-            meshStatusSelect: document.getElementById('mesh-status-select'),
-            meshMessageTextEn: document.getElementById('mesh-message-text'),
-            meshMessageTextCeb: document.getElementById('mesh-message-text-ceb'),
-            sendMeshMessageBtn: document.getElementById('send-mesh-message-btn'),
-            meshStatus: document.getElementById('mesh-status'),
-            
-            hotlineList: document.getElementById('hotline-list'),
-            mainContent: document.querySelector('main')
-        };
-
-        // --- LANGUAGE DATA ---
-        const LANGUAGES = {
-            en: 'English',
-            ceb: 'Cebuano'
-        };
-
-        // --- EMERGENCY HOTLINES DATA (Offline Static Data) ---
-        const HOTLINES = [
-            { name: { en: "Emergency (National)", ceb: "Emerhensiya (Nasyonal)" }, number: "911", color: "red" },
-            { name: { en: "Police (Cebu City)", ceb: "Pulis (Dakbayan sa Cebu)" }, number: "166", color: "blue" },
-            { name: { en: "Fire Department", ceb: "BOMBERO" }, number: "(032) 254-2070", color: "red" },
-            { name: { en: "Philippine Red Cross (Cebu)", ceb: "Philippine Red Cross (Cebu)" }, number: "(032) 253-9793", color: "red" },
-            { name: { en: "CDRRMO (Cebu City Disaster Office)", ceb: "CDRRMO" }, number: "262-1424", color: "yellow" },
-            { name: { en: "VICO (Vicente Sotto Memorial Medical Center)", ceb: "VICO Hospital" }, number: "(032) 253-9891", color: "green" },
-        ];
-
-
-        // --- UTILITY FUNCTIONS ---
-
-        /** Toggles all visible text elements between English and Cebuano. */
-        function toggleLanguage() {
-            currentLang = (currentLang === 'en') ? 'ceb' : 'en';
-            DOM.langToggle.textContent = LANGUAGES[currentLang];
-
-            document.querySelectorAll('.lang-en').forEach(el => el.classList.toggle('hidden', currentLang !== 'en'));
-            document.querySelectorAll('.lang-ceb').forEach(el => el.classList.toggle('hidden', currentLang !== 'ceb'));
-
-            // Update placeholder text manually for dual Comms inputs
-            DOM.meshMessageTextEn.classList.toggle('hidden', currentLang !== 'en');
-            DOM.meshMessageTextCeb.classList.toggle('hidden', currentLang !== 'ceb');
-
-            renderHotlines();
-            
-            // Re-label active tool buttons if any are active, updating for dark theme active color (bg-gray-700)
-            if (isFlashlightOn) {
-                DOM.flashlightToggle.innerHTML = `<i data-lucide="lightbulb" class="w-6 h-6 mr-2"></i><span class="lang-en ${currentLang === 'ceb' ? 'hidden' : ''}">Turn Off Light</span><span class="lang-ceb ${currentLang === 'en' ? 'hidden' : ''}">I-patay ang Sulo</span>`;
-                lucide.createIcons();
-                DOM.flashlightToggle.classList.replace('bg-yellow-500', 'bg-gray-700');
-            } else {
-                 DOM.flashlightToggle.innerHTML = `<i data-lucide="lightbulb" class="w-6 h-6 mr-2"></i><span class="lang-en ${currentLang === 'ceb' ? 'hidden' : ''}">Activate Light</span><span class="lang-ceb ${currentLang === 'en' ? 'hidden' : ''}">I-aktibo ang Sulo</span>`;
-                 lucide.createIcons();
-                 DOM.flashlightToggle.classList.replace('bg-gray-700', 'bg-yellow-500');
-            }
-            if (isSirenOn) {
-                DOM.sirenToggle.innerHTML = `<i data-lucide="volume-2" class="w-6 h-6 mr-2"></i><span class="lang-en ${currentLang === 'ceb' ? 'hidden' : ''}">Stop Siren & Flash</span><span class="lang-ceb ${currentLang === 'en' ? 'hidden' : ''}">Hunonga ang Sirena ug Flash</span>`;
-                lucide.createIcons();
-                DOM.sirenToggle.classList.replace('bg-red-600', 'bg-gray-700');
-            } else {
-                 DOM.sirenToggle.innerHTML = `<i data-lucide="volume-2" class="w-6 h-6 mr-2"></i><span class="lang-en ${currentLang === 'ceb' ? 'hidden' : ''}">Start Siren & Flash</span><span class="lang-ceb ${currentLang === 'en' ? 'hidden' : ''}">Sugdi ang Sirena ug Flash</span>`;
-                 lucide.createIcons();
-                 DOM.sirenToggle.classList.replace('bg-gray-700', 'bg-red-600');
-            }
-            if (isSOSOn) {
-                DOM.sosToggle.innerHTML = `<i data-lucide="message-square" class="w-6 h-6 mr-2"></i><span class="lang-en ${currentLang === 'ceb' ? 'hidden' : ''}">Stop S.O.S.</span><span class="lang-ceb ${currentLang === 'en' ? 'hidden' : ''}">Hunonga ang S.O.S.</span>`;
-                lucide.createIcons();
-                DOM.sosToggle.classList.replace('bg-blue-600', 'bg-gray-700');
-            } else {
-                 DOM.sosToggle.innerHTML = `<i data-lucide="message-square" class="w-6 h-6 mr-2"></i><span class="lang-en ${currentLang === 'ceb' ? 'hidden' : ''}">Start S.O.S. ( • • • — — — • • • )</span><span class="lang-ceb ${currentLang === 'en' ? 'hidden' : ''}">Sugdi ang S.O.S. ( • • • — — — • • • )</span>`;
-                 lucide.createIcons();
-                 DOM.sosToggle.classList.replace('bg-gray-700', 'bg-blue-600');
-            }
-
-            // If an overlay is active, re-render its content for language
-            if (!DOM.overlay.classList.contains('hidden')) {
-                // Determine which tool is active and simulate a re-activation to update text
-                if (isFlashlightOn) startFlashlight(true); // Internal re-render
-                else if (isSirenOn) startSiren(true); // Internal re-render
-                else if (isSOSOn) startSOS(true); // Internal re-render
-            }
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
         }
 
-        /** Handles navigation between main tabs. */
-        function navigateTo(tabName) {
-            Object.values(DOM.tabs).forEach(tab => tab.classList.add('hidden'));
-            DOM.tabs[tabName].classList.remove('hidden');
+        function animate() {
+            requestAnimationFrame(animate);
 
-            DOM.navButtons.forEach(btn => {
-                btn.classList.remove('active');
-                if (btn.dataset.tab === tabName) {
-                    btn.classList.add('active');
+            // Subtle animation for the "4D" effect
+            particleSystem.rotation.y += 0.0005;
+            particleSystem.rotation.x += 0.0001;
+
+            const positions = particleSystem.geometry.attributes.position.array;
+            
+            // Move particles slightly towards the center and then re-randomize
+            for (let i = 0; i < positions.length / 3; i++) {
+                positions[i * 3] += Math.sin(Date.now() * 0.0001 + i * 1) * 0.0001;
+                positions[i * 3 + 1] += Math.cos(Date.now() * 0.0001 + i * 1) * 0.0001;
+                positions[i * 3 + 2] += Math.sin(Date.now() * 0.0001 + i * 1) * 0.0001;
+            }
+            particleSystem.geometry.attributes.position.needsUpdate = true;
+
+
+            renderer.render(scene, camera);
+        }
+
+        // Start the 3D background on window load
+        window.onload = function () {
+            initThree();
+            animate();
+        };
+
+        // ====================================================================
+        // FIREBASE & APPLICATION LOGIC
+        // ====================================================================
+
+        let allBlotters = [];
+        let currentRole = 'Citizen';
+        let blotterToUpdateId = null;
+        let blotterActionCallback = null;
+
+        // Global function to receive real-time updates from Firestore listener
+        window.handleBlotterUpdate = (blotters, userId) => {
+            allBlotters = blotters;
+            // Re-render the dashboard whenever data changes
+            renderDashboard(currentRole, userId); 
+        };
+
+        // --- Utility Functions ---
+
+        // Custom Modal (replaces alert/confirm)
+        const showModal = (title, body, isConfirm, callback) => {
+            document.getElementById('modal-title').textContent = title;
+            document.getElementById('modal-body').innerHTML = body;
+            
+            const modal = document.getElementById('custom-modal');
+            const confirmBtn = document.getElementById('modal-confirm-btn');
+            const cancelBtn = document.getElementById('modal-cancel-btn');
+
+            if (isConfirm) {
+                cancelBtn.classList.remove('hidden');
+                confirmBtn.textContent = 'Proceed';
+                blotterActionCallback = callback;
+            } else {
+                cancelBtn.classList.add('hidden');
+                confirmBtn.textContent = 'OK';
+                blotterActionCallback = null; // No action needed for simple alerts
+            }
+
+            modal.style.display = 'flex';
+        };
+
+        window.closeModal = (confirmed) => {
+            document.getElementById('custom-modal').style.display = 'hidden';
+            if (confirmed && blotterActionCallback) {
+                blotterActionCallback();
+            }
+            // Reset for safety
+            blotterActionCallback = null;
+        };
+
+        const generateBlotterId = () => {
+            const timestamp = Date.now().toString(36);
+            const random = Math.random().toString(36).substring(2, 5);
+            return (timestamp + random).toUpperCase();
+        };
+
+        const formatDate = (timestamp) => {
+            if (!timestamp) return 'N/A';
+            // Firestore serverTimestamp is an object until saved, then a Timestamp
+            const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+            return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+        };
+
+        // --- Core Firestore Operations ---
+
+        const updateBlotterStatus = async (blotterId, newStatus, scheduledDate = null, remarks = '') => {
+            const { db, userId, firestore } = window.firebaseApp;
+            if (!db || !userId) return showError("System not initialized or user not logged in.");
+
+            const { doc, updateDoc, collection } = firestore;
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            const blotterRef = doc(collection(db, 'artifacts', appId, 'public', 'data', 'blotterRecords'), blotterId);
+            
+            try {
+                const updateData = {
+                    status: newStatus,
+                    remarks: remarks,
+                    lastUpdatedBy: userId,
+                    lastUpdated: firestore.serverTimestamp()
+                };
+
+                if (scheduledDate) {
+                    updateData.mediationDate = scheduledDate;
                 }
-            });
-            // Scroll to the top of the main content when navigating
-            DOM.mainContent.scrollTop = 0; 
-        }
 
-        /** Renders the emergency hotlines list dynamically. */
-        function renderHotlines() {
-            DOM.hotlineList.innerHTML = HOTLINES.map(h => `
-                <div class="flex items-center justify-between p-4 bg-gray-900 rounded-xl shadow-lg border-l-8 border-${h.color}-600 depth-card transition hover:scale-[1.01]">
-                    <div>
-                        <p class="font-bold text-lg text-gray-100">${h.name[currentLang]}</p>
-                        <p class="text-gray-400 text-sm">${h.number}</p>
-                    </div>
-                    <a href="tel:${h.number.replace(/[^0-9+]/g, '')}" class="py-2 px-4 bg-green-600 text-white font-semibold rounded-full text-sm transition duration-200 hover:bg-green-700 active:scale-95">
-                        <span class="lang-en ${currentLang === 'ceb' ? 'hidden' : ''}">Call Now</span>
-                        <span class="lang-ceb ${currentLang === 'en' ? 'hidden' : ''}">Tawag Karon</span>
-                    </a>
-                </div>
-            `).join('');
-            // Manually update the language class on the Call Now button spans (needed because map is static)
-            document.querySelectorAll('#hotline-list a').forEach(a => {
-                 const enSpan = a.querySelector('.lang-en');
-                 const cebSpan = a.querySelector('.lang-ceb');
-                 if (enSpan && cebSpan) {
-                     enSpan.classList.toggle('hidden', currentLang !== 'en');
-                     cebSpan.classList.toggle('hidden', currentLang !== 'ceb');
-                 }
-            });
-        }
+                await updateDoc(blotterRef, updateData);
+                showModal('Success', `Case **${blotterId}** status updated to **${newStatus}**.`, false);
 
-        /** Manages the full-screen overlay (used for flashlight, siren, SOS). */
-        function showOverlay(backgroundColor, messageKey, messageColor = 'text-white') {
-            const message = currentLang === 'en' 
-                ? (messageKey === 'flashlight' ? 'SCREEN FLASHLIGHT ACTIVE' : (messageKey === 'siren' ? 'DISTRESS SIREN ACTIVE' : 'SOS SIGNAL ACTIVE'))
-                : (messageKey === 'flashlight' ? 'SULO SA SCREEN NAKA-AKTUBO' : (messageKey === 'siren' ? 'SIRENA SA KALISUD NAKA-AKTUBO' : 'SOS NAKA-AKTUBO'));
+            } catch (error) {
+                console.error("Error updating document:", error);
+                showError("Failed to update case status: " + error.message);
+            }
+        };
 
-            DOM.overlay.style.backgroundColor = backgroundColor;
+        // --- Role-Based Dashboard Rendering ---
+
+        const switchRole = (role) => {
+            currentRole = role;
+            const userId = window.firebaseApp.userId;
+            renderDashboard(role, userId);
+        };
+
+        const renderDashboard = (role, userId) => {
+            const container = document.getElementById('dashboard-container');
+            let contentHTML = '';
+
+            switch (role) {
+                case 'Citizen':
+                    contentHTML = renderCitizenView(userId);
+                    break;
+                case 'Staff':
+                    contentHTML = renderStaffView(userId);
+                    break;
+                case 'Admin':
+                    contentHTML = renderAdminView(userId);
+                    break;
+                case 'Captain':
+                    contentHTML = renderCaptainView(userId);
+                    break;
+            }
+
+            container.innerHTML = contentHTML;
             
-            // Inject dynamic content and style it
-            DOM.overlay.innerHTML = `
-                <div class="p-8 text-center" onclick="event.stopPropagation()">
-                    <h1 class="text-4xl sm:text-6xl font-black ${messageColor} mb-8">${message}</h1>
-                    <button class="bg-gray-800 text-white font-bold py-4 px-10 rounded-full shadow-2xl hover:bg-gray-900 transition duration-300 active:scale-95" 
-                            onclick="hideOverlay();">
-                        <span class="lang-en ${currentLang === 'ceb' ? 'hidden' : ''}">TAP TO STOP</span>
-                        <span class="lang-ceb ${currentLang === 'en' ? 'hidden' : ''}">I-TAP PARA HUNONGON</span>
-                    </button>
+            // Re-attach event listeners after innerHTML is set (for Staff/Captain views)
+            if (role === 'Staff' || role === 'Captain') {
+                attachModalEventListeners();
+            }
+            if (role === 'Citizen') {
+                attachCitizenFormListener();
+            }
+        };
+
+        // --- Citizen View ---
+
+        const renderCitizenView = (userId) => {
+            const citizenBlotters = allBlotters.filter(b => b.reporterId === userId);
+
+            const listItems = citizenBlotters.length > 0
+                ? citizenBlotters.map(b => `
+                    <li class="p-4 bg-gray-700/70 rounded-lg shadow-md border-l-4 border-indigo-400 flex justify-between items-center flex-wrap">
+                        <div>
+                            <p class="font-bold text-indigo-300">Case ID: ${b.id}</p>
+                            <p class="text-sm text-gray-400">Incident: ${b.incidentType}</p>
+                            <p class="text-sm text-gray-400">Details: ${b.details.substring(0, 50)}...</p>
+                        </div>
+                        <div class="text-right mt-2 md:mt-0">
+                            <span class="inline-block px-3 py-1 text-sm font-semibold rounded-full ${getStatusColor(b.status)}">
+                                ${b.status}
+                            </span>
+                            <p class="text-xs text-gray-500 mt-1">Filed: ${formatDate(b.timestamp)}</p>
+                        </div>
+                    </li>
+                `).join('')
+                : '<p class="text-center text-gray-400 p-4 bg-gray-800/70 rounded-lg">No blotter records found for your user ID.</p>';
+
+
+            return `
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <!-- Submit Online Blotter/Complaint -->
+                    <div class="lg:col-span-1 p-6 bg-gray-800/70 rounded-xl shadow-2xl border border-indigo-700 h-fit">
+                        <h2 class="text-2xl font-semibold mb-4 text-indigo-300">Submit New Complaint</h2>
+                        <form id="blotter-form" class="space-y-4">
+                            <div>
+                                <label for="incidentType" class="block text-sm font-medium text-gray-400">Incident Type</label>
+                                <select id="incidentType" required class="w-full p-2 bg-gray-900 border border-gray-600 rounded-lg text-white focus:ring-indigo-500">
+                                    <option value="">Select Type</option>
+                                    <option value="Physical Dispute">Physical Dispute</option>
+                                    <option value="Theft/Robbery">Theft/Robbery</option>
+                                    <option value="Property Damage">Property Damage</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="details" class="block text-sm font-medium text-gray-400">Details of Incident</label>
+                                <textarea id="details" rows="4" required class="w-full p-2 bg-gray-900 border border-gray-600 rounded-lg text-white focus:ring-indigo-500" placeholder="Provide a brief description..."></textarea>
+                            </div>
+                            <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 rounded-lg transition duration-200 shadow-md">
+                                Submit Blotter
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Track Case Status -->
+                    <div class="lg:col-span-2 p-6 bg-gray-800/70 rounded-xl shadow-2xl border border-gray-700">
+                        <h2 class="text-2xl font-semibold mb-4 text-indigo-300">Your Case Status</h2>
+                        <ul class="space-y-3">
+                            ${listItems}
+                        </ul>
+                    </div>
                 </div>
             `;
-            // Ensure language is correctly applied to injected content
-            DOM.overlay.querySelector('.lang-en').classList.toggle('hidden', currentLang !== 'en');
-            DOM.overlay.querySelector('.lang-ceb').classList.toggle('hidden', currentLang !== 'ceb');
-
-            DOM.overlay.classList.remove('hidden');
-            
-            // Hide everything else using Tailwind's 'hidden' class
-            document.querySelector('header').classList.add('hidden');
-            document.querySelector('nav').classList.add('hidden');
-            document.querySelector('footer').classList.add('hidden'); // Hide footer when overlay is active
-            DOM.mainContent.classList.add('hidden');
-
-            DOM.body.classList.add('overflow-hidden');
-        }
-
-        function hideOverlay() {
-            // Stop all active signals first
-            stopFlashlight();
-            stopSiren();
-            stopSOS();
-            
-            DOM.overlay.classList.add('hidden');
-            
-            // Restore UI elements
-            document.querySelector('header').classList.remove('hidden');
-            document.querySelector('nav').classList.remove('hidden');
-            document.querySelector('footer').classList.remove('hidden'); // Show footer when overlay hides
-            DOM.mainContent.classList.remove('hidden');
-            
-            DOM.body.classList.remove('overflow-hidden');
-            
-            // Clear injected overlay content
-            DOM.overlay.innerHTML = '';
-        }
-
-        // --- TOOLKIT IMPLEMENTATION (Flashlight, Siren, SOS) ---
+        };
         
-        let isFlashlightOn = false;
-
-        function startFlashlight(isRelabeling = false) {
-             if (isFlashlightOn && !isRelabeling) return;
-             isFlashlightOn = true;
-             
-             if (!isRelabeling) {
-                 // Stop others just in case
-                 stopSiren();
-                 stopSOS();
-             }
-
-             showOverlay('white', 'flashlight', 'text-gray-900');
-             
-             // Update button text and color to 'on' state (gray)
-             DOM.flashlightToggle.innerHTML = `<i data-lucide="lightbulb" class="w-6 h-6 mr-2"></i><span class="lang-en ${currentLang === 'ceb' ? 'hidden' : ''}">Turn Off Light</span><span class="lang-ceb ${currentLang === 'en' ? 'hidden' : ''}">I-patay ang Sulo</span>`;
-             lucide.createIcons();
-             DOM.flashlightToggle.classList.replace('bg-yellow-500', 'bg-gray-700');
-        }
-
-        function stopFlashlight() {
-            if (!isFlashlightOn) return;
-            isFlashlightOn = false;
-            
-            // Update button text and color to 'off' state (yellow)
-            DOM.flashlightToggle.innerHTML = `<i data-lucide="lightbulb" class="w-6 h-6 mr-2"></i><span class="lang-en ${currentLang === 'ceb' ? 'hidden' : ''}">Activate Light</span><span class="lang-ceb ${currentLang === 'en' ? 'hidden' : ''}">I-aktibo ang Sulo</span>`;
-            lucide.createIcons();
-            DOM.flashlightToggle.classList.replace('bg-gray-700', 'bg-yellow-500');
-        }
-
-        function toggleFlashlight() {
-            if (isFlashlightOn) {
-                hideOverlay();
-            } else {
-                startFlashlight();
-            }
-        }
-
-
-        let audioContext, oscillator, sirenInterval;
-        let isSirenOn = false;
-        let mediaStream = null;
-        let track = null;
-
-        // Helper function to handle camera flash activation
-        async function startCameraFlash() {
-             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                console.log("Media Devices not supported. Using screen flash fallback.");
-                return false;
-            }
-
-            try {
-                // Request camera stream to access torch/flash
-                mediaStream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { 
-                        facingMode: 'environment' 
-                    } 
-                });
-                track = mediaStream.getVideoTracks()[0];
-                const capabilities = track.getCapabilities();
-
-                if (capabilities.torch) {
-                    await track.applyConstraints({
-                        advanced: [{ torch: true }]
-                    });
-                    console.log("Camera flash activated.");
-                    return true;
-                } else {
-                    console.log("Torch capability not found. Using screen flash fallback.");
-                    // Clean up stream immediately if no torch is available
-                    track.stop(); 
-                    mediaStream.getTracks().forEach(t => t.stop());
-                    mediaStream = null;
-                    track = null;
-                    return false;
-                }
-            } catch (e) {
-                console.error("Could not access camera for flash:", e);
-                // Clean up stream on error
-                if (mediaStream) {
-                    mediaStream.getTracks().forEach(t => t.stop());
-                    mediaStream = null;
-                    track = null;
-                }
-                return false;
-            }
-        }
-
-        // Helper function to stop camera flash
-        function stopCameraFlash() {
-            if (track) {
-                try {
-                    track.applyConstraints({ advanced: [{ torch: false }] });
-                    track.stop();
-                } catch (e) { 
-                    console.warn("Could not turn off torch or stop track.", e);
-                }
-            }
-            if (mediaStream) {
-                mediaStream.getTracks().forEach(t => t.stop());
-            }
-            mediaStream = null;
-            track = null;
-        }
-
-
-        async function startSiren(isRelabeling = false) {
-            if (isSirenOn && !isRelabeling) return;
-            isSirenOn = true;
-            
-            // Stop others just in case
-            if (!isRelabeling) {
-                stopFlashlight();
-                stopSOS();
-            }
-
-            // Attempt to use camera flash on initial activation or check if it was already active
-            const useCameraFlash = isRelabeling ? (mediaStream !== null) : await startCameraFlash();
-
-            // 1. Audio (Web Audio API for simple tone generation)
-            if (!isRelabeling) {
-                 try {
-                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                    oscillator = audioContext.createOscillator();
-                    oscillator.type = 'sine';
-                    // Urgent, high-pitch tone: 800Hz
-                    oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
-                    oscillator.connect(audioContext.destination);
-                    oscillator.start();
-                } catch (e) {
-                    console.error('Web Audio API failed to start. Siren audio unavailable.', e);
-                }
-            }
-
-
-            // 2. Screen Flash (Faster, more urgent flash)
-            if (!sirenInterval) {
-                let flashState = 0;
-                sirenInterval = setInterval(() => {
-                    // FIX: Immediate check inside the interval to prevent race conditions 
-                    if (!isSirenOn) {
-                        clearInterval(sirenInterval);
-                        sirenInterval = null;
-                        return;
-                    }
-
-                    if (!useCameraFlash) {
-                         // Only flash the screen if camera flash failed
-                        const sirenColor = flashState % 2 === 0 ? 'rgba(255, 0, 0, 1)' : 'rgba(0, 0, 0, 1)';
-                        showOverlay(sirenColor, 'siren');
-                    } else if (flashState % 2 === 0) {
-                        // If camera flash is on, flash screen Red/Black
-                        showOverlay('rgba(255, 0, 0, 1)', 'siren'); 
-                    } else {
-                         showOverlay('rgba(0, 0, 0, 1)', 'siren');
-                    }
+        const attachCitizenFormListener = () => {
+            const form = document.getElementById('blotter-form');
+            if (form) {
+                form.addEventListener('submit', async (e) => {
+                    e.preventDefault();
                     
-                    flashState++;
-                }, 250); // Flash every 250ms
-            } else if (isRelabeling) {
-                // Just re-render the overlay for language update
-                const sirenColor = DOM.overlay.style.backgroundColor;
-                showOverlay(sirenColor, 'siren');
-            }
-            
-            // 3. Vibration (if available, starts only once)
-            if (navigator.vibrate && !isRelabeling) {
-                // Urgent, repeating vibration pattern
-                navigator.vibrate([500, 200, 500, 200, 500]);
-            }
+                    const { db, userId, firestore } = window.firebaseApp;
+                    if (!db || !userId) return showError("System not initialized or user not logged in.");
 
-            DOM.sirenToggle.innerHTML = `<i data-lucide="volume-2" class="w-6 h-6 mr-2"></i><span class="lang-en ${currentLang === 'ceb' ? 'hidden' : ''}">Stop Siren & Flash</span><span class="lang-ceb ${currentLang === 'en' ? 'hidden' : ''}">Hunonga ang Sirena ug Flash</span>`;
-            lucide.createIcons();
-            // Use bg-gray-700 for active state on dark theme
-            DOM.sirenToggle.classList.replace('bg-red-600', 'bg-gray-700');
-        }
+                    const incidentType = document.getElementById('incidentType').value;
+                    const details = document.getElementById('details').value;
+                    
+                    if (!incidentType || !details) return showError("Please fill out all fields.");
 
-        function stopSiren() {
-            if (!isSirenOn) return;
-            isSirenOn = false;
+                    const newBlotter = {
+                        blotterId: generateBlotterId(), // Using custom ID generator for presentation
+                        reporterId: userId,
+                        incidentType: incidentType,
+                        details: details,
+                        status: 'Filed',
+                        timestamp: firestore.serverTimestamp(),
+                        lastUpdated: firestore.serverTimestamp()
+                    };
 
-            clearInterval(sirenInterval);
-            sirenInterval = null;
-            
-            stopCameraFlash(); // Stop the camera flash
-
-            if (oscillator) {
-                try {
-                    oscillator.stop();
-                    oscillator.disconnect();
-                } catch (e) { /* ignore errors on stopping */ }
-                oscillator = null;
-            }
-            if (audioContext) {
-                try {
-                    // Check if audioContext is running before closing
-                    if (audioContext.state !== 'closed') {
-                         audioContext.close();
+                    try {
+                        const { addDoc, collection } = firestore;
+                        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+                        const blotterCollectionRef = collection(db, 'artifacts', appId, 'public', 'data', 'blotterRecords');
+                        
+                        await addDoc(blotterCollectionRef, newBlotter);
+                        
+                        showModal('Success!', `Your complaint has been successfully filed with Case ID: **${newBlotter.blotterId}**. You can track its status below.`, false);
+                        form.reset(); // Clear the form
+                    } catch (error) {
+                        console.error("Error submitting blotter:", error);
+                        showError("Failed to submit blotter: " + error.message);
                     }
-                } catch (e) { /* ignore errors on closing */ }
-                audioContext = null;
+                });
             }
-            if (navigator.vibrate) {
-                navigator.vibrate(0);
+        };
+
+        // --- Staff View ---
+
+        const renderStaffView = (userId) => {
+            // Include: Update Case Status/Details, Schedule Conciliation/Mediation, Record New Incident Data, Search & View Blotter Records
+            const openCases = allBlotters.filter(b => b.status !== 'Closed' && b.status !== 'Approved');
+
+            return `
+                <div class="space-y-6">
+                    <h2 class="text-3xl font-bold text-indigo-300">Staff Dashboard</h2>
+
+                    <!-- Record New Incident Data (Mocked) -->
+                    <div class="p-6 bg-gray-800/70 rounded-xl shadow-xl border border-gray-700">
+                        <h3 class="text-xl font-semibold mb-3 text-indigo-400">Record New Incident Data</h3>
+                        <p class="text-gray-400">
+                            Use a separate form to record incidents not yet reported by a citizen. This functionality is part of the "Record New Incident Data" use case. (Mocked: Use the Citizen form to simulate this.)
+                        </p>
+                    </div>
+
+                    <!-- Search & View Blotter Records (Table) -->
+                    <div class="p-6 bg-gray-800/70 rounded-xl shadow-xl border border-indigo-700">
+                        <h3 class="text-xl font-semibold mb-4 text-indigo-400">Open Cases for Action (${openCases.length})</h3>
+                        ${renderBlotterTable(openCases, 'Staff')}
+                    </div>
+                </div>
+            `;
+        };
+
+        // --- Admin View ---
+
+        const renderAdminView = (userId) => {
+            // Include: Generate Statistical Reports (incl. AI Insights), Search & View Blotter Records, Manage User Accounts & Roles
+            const closedCases = allBlotters.filter(b => b.status === 'Closed' || b.status === 'Approved').length;
+            const openCases = allBlotters.filter(b => b.status !== 'Closed' && b.status !== 'Approved').length;
+            const totalCases = allBlotters.length;
+            const mediationScheduled = allBlotters.filter(b => b.status === 'Scheduled').length;
+
+            return `
+                <div class="space-y-6">
+                    <h2 class="text-3xl font-bold text-indigo-300">System Administrator Dashboard</h2>
+
+                    <!-- Statistical Reports (Mocked AI Insights) -->
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        ${renderStatCard('Total Cases', totalCases, 'bg-purple-600', 'fas fa-chart-line')}
+                        ${renderStatCard('Open Cases', openCases, 'bg-blue-600', 'fas fa-clock')}
+                        ${renderStatCard('Closed Cases', closedCases, 'bg-green-600', 'fas fa-check-circle')}
+                        ${renderStatCard('Mediation Scheduled', mediationScheduled, 'bg-yellow-600', 'fas fa-calendar')}
+                    </div>
+
+                    <div class="p-6 bg-gray-800/70 rounded-xl shadow-xl border border-indigo-700">
+                        <h3 class="text-xl font-semibold mb-4 text-indigo-400">AI Insights & Trends (Mocked)</h3>
+                        <ul class="list-disc list-inside space-y-2 text-gray-300 ml-4">
+                            <li><span class="font-bold text-red-400">High Risk:</span> Theft/Robbery incidents rose by 15% in the last quarter (Predicted hotspot: Zone 5).</li>
+                            <li><span class="font-bold text-green-400">Efficiency:</span> Average case resolution time reduced by 5 days due to new scheduling process.</li>
+                            <li><span class="font-bold text-blue-400">System Load:</span> 85% of citizens use the Chatbot Interface (Submit/Track).</li>
+                        </ul>
+                    </div>
+
+                    <!-- Search & View Blotter Records (Table) -->
+                    <div class="p-6 bg-gray-800/70 rounded-xl shadow-xl border border-gray-700">
+                        <h3 class="text-xl font-semibold mb-4 text-indigo-400">Full Blotter Records</h3>
+                        ${renderBlotterTable(allBlotters, 'Admin')}
+                    </div>
+
+                    <!-- Manage User Accounts & Roles (Mocked) -->
+                    <div class="p-6 bg-gray-800/70 rounded-xl shadow-xl border border-gray-700">
+                        <h3 class="text-xl font-semibold mb-3 text-indigo-400">Manage User Accounts & Roles (Mocked)</h3>
+                        <p class="text-gray-400">
+                            Interface for managing Barangay Staff, Captains, and Admin accounts would be implemented here, allowing for role assignment and account deactivation.
+                        </p>
+                    </div>
+                </div>
+            `;
+        };
+
+        const renderStatCard = (title, value, color, iconClass) => `
+            <div class="p-4 ${color} rounded-xl shadow-xl flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-medium text-white/80">${title}</p>
+                    <p class="text-3xl font-bold text-white">${value}</p>
+                </div>
+                <!-- Mock Icon -->
+                <svg class="w-8 h-8 text-white/70" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+            </div>
+        `;
+
+        // --- Captain View ---
+
+        const renderCaptainView = (userId) => {
+            // Include: Review & Approve Case Decisions
+            const casesPendingApproval = allBlotters.filter(b => b.status === 'Decision Ready');
+
+            return `
+                <div class="space-y-6">
+                    <h2 class="text-3xl font-bold text-indigo-300">Barangay Captain / Lupon Dashboard</h2>
+                    
+                    <!-- Review & Approve Case Decisions -->
+                    <div class="p-6 bg-gray-800/70 rounded-xl shadow-xl border border-indigo-700">
+                        <h3 class="text-xl font-semibold mb-4 text-indigo-400">Cases Pending Final Decision (${casesPendingApproval.length})</h3>
+                        ${renderBlotterTable(casesPendingApproval, 'Captain')}
+                    </div>
+
+                    <!-- Other Duties Mock -->
+                    <div class="p-6 bg-gray-800/70 rounded-xl shadow-xl border border-gray-700">
+                        <h3 class="text-xl font-semibold mb-3 text-indigo-400">Other Lupon/Captain Tasks (Mocked)</h3>
+                        <p class="text-gray-400">
+                            The Captain/Lupon also reviews statistical reports and operational insights to make policy decisions based on the data provided by the Administrator.
+                        </p>
+                    </div>
+                </div>
+            `;
+        };
+
+        // --- Shared Table Renderer ---
+
+        const getStatusColor = (status) => {
+            switch (status) {
+                case 'Filed': return 'bg-blue-600 text-white';
+                case 'Scheduled': return 'bg-yellow-600 text-gray-900';
+                case 'Review':
+                case 'Decision Ready': return 'bg-red-600 text-white';
+                case 'Closed': return 'bg-green-600 text-white';
+                case 'Approved': return 'bg-indigo-600 text-white';
+                default: return 'bg-gray-500 text-white';
+            }
+        };
+
+        const renderBlotterTable = (blotters, viewerRole) => {
+            if (blotters.length === 0) {
+                return '<p class="text-center text-gray-400 p-4">No records to display for this view.</p>';
             }
 
-            DOM.sirenToggle.innerHTML = `<i data-lucide="volume-2" class="w-6 h-6 mr-2"></i><span class="lang-en ${currentLang === 'ceb' ? 'hidden' : ''}">Start Siren & Flash</span><span class="lang-ceb ${currentLang === 'en' ? 'hidden' : ''}">Sugdi ang Sirena ug Flash</span>`;
-            lucide.createIcons();
-            // Revert to primary button color (red-600)
-            DOM.sirenToggle.classList.replace('bg-gray-700', 'bg-red-600');
-        }
-
-        function toggleSiren() {
-            if (isSirenOn) {
-                hideOverlay();
-            } else {
-                startSiren();
-            }
-        }
-
-        // Morse Code for SOS (Short: 200ms, Long: 600ms, Pause: 200ms)
-        const SOS_PATTERN = [
-            200, 200, 200, 200, 200, 600, // S
-            600, 200, 600, 200, 600, 600, // O
-            200, 200, 200, 200, 200, 1000, // S (Long pause after one sequence)
-        ];
-        let sosTimeout;
-        let isSOSOn = false;
-
-        function startSOS(isRelabeling = false) {
-            if (isSOSOn && !isRelabeling) return;
-            isSOSOn = true;
-            
-            // Stop others just in case
-            if (!isRelabeling) {
-                stopFlashlight();
-                stopSiren();
-            }
-
-            let patternIndex = 0;
-
-            const executePattern = () => {
-                if (!isSOSOn) {
-                    clearTimeout(sosTimeout);
-                    return;
-                }
-
-                const duration = SOS_PATTERN[patternIndex % SOS_PATTERN.length];
-
-                // Flash white/black
-                if (patternIndex % 2 === 0) {
-                    showOverlay('white', 'sos', 'text-gray-900');
-                } else {
-                    showOverlay('black', 'sos', 'text-white');
-                }
-
-                if (navigator.vibrate && patternIndex % 2 === 0 && !isRelabeling) {
-                     navigator.vibrate(duration);
-                }
-
-                patternIndex = (patternIndex + 1);
-                sosTimeout = setTimeout(executePattern, duration);
-            };
-            
-            // Start the sequence if not just relabeling
-            if (!isRelabeling) {
-                // Start with screen off (black) for the first short flash (dot)
-                showOverlay('black', 'sos', 'text-white'); 
-                executePattern(); 
-            } else {
-                 // If relabeling, re-render the current state
-                 const currentBg = DOM.overlay.style.backgroundColor;
-                 const colorKey = currentBg === 'white' ? 'text-gray-900' : 'text-white';
-                 showOverlay(currentBg, 'sos', colorKey);
-            }
-            
-            DOM.sosToggle.innerHTML = `<i data-lucide="message-square" class="w-6 h-6 mr-2"></i><span class="lang-en ${currentLang === 'ceb' ? 'hidden' : ''}">Stop S.O.S.</span><span class="lang-ceb ${currentLang === 'en' ? 'hidden' : ''}">Hunonga ang S.O.S.</span>`;
-            lucide.createIcons();
-            // Use bg-gray-700 for active state on dark theme
-            DOM.sosToggle.classList.replace('bg-blue-600', 'bg-gray-700');
-        }
-
-        function stopSOS() {
-            if (!isSOSOn) return;
-            isSOSOn = false;
-            clearTimeout(sosTimeout);
-            if (navigator.vibrate) {
-                navigator.vibrate(0);
-            }
-            DOM.sosToggle.innerHTML = `<i data-lucide="message-square" class="w-6 h-6 mr-2"></i><span class="lang-en ${currentLang === 'ceb' ? 'hidden' : ''}">Start S.O.S. ( • • • — — — • • • )</span><span class="lang-ceb ${currentLang === 'en' ? 'hidden' : ''}">Sugdi ang S.O.S. ( • • • — — — • • • )</span>`;
-            lucide.createIcons();
-            // Revert to primary button color (blue-600)
-            DOM.sosToggle.classList.replace('bg-gray-700', 'bg-blue-600');
-        }
-
-        function toggleSOS() {
-            if (isSOSOn) {
-                hideOverlay();
-            } else {
-                startSOS();
-            }
-        }
-        
-        // --- MOCK UTILITY FUNCTIONS (Geolocation handling fixed for graceful error reporting) ---
-
-        /** Gets user's current GPS location or a mock fallback. */
-        function getGeolocation(callback) {
-            // Options for geolocation attempt (prioritize quick, low-accuracy fix)
-            const geoOptions = { 
-                enableHighAccuracy: false, 
-                timeout: 5000, 
-                maximumAge: 0 
-            };
-            
-            if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(
-                    (position) => {
-                        callback({
-                            lat: position.coords.latitude.toFixed(6),
-                            lon: position.coords.longitude.toFixed(6)
-                        });
-                    },
-                    // Geolocation failed. Using mock location. 
-                    (error) => {
-                        // The previous error log is expected in iframe environments. We log the action instead of the error.
-                        console.warn("Location permission denied or timeout. Using mock location (Cebu IT Park)."); 
-                        // Mock location (e.g., Cebu IT Park coordinates)
-                        callback({ lat: '10.334000', lon: '123.905600' }); 
-                    },
-                    geoOptions // Pass options back to the call
-                );
-            } else {
-                console.warn("Geolocation not supported. Using mock location (Cebu IT Park).");
-                // Mock location
-                callback({ lat: '10.334000', lon: '123.905600' });
-            }
-        }
-
-        // --- SMART COMMUNICATION IMPLEMENTATION ---
-        
-        // This function simulates the high-priority, low-bandwidth transmission.
-        function sendMicroPacket(status) {
-            getGeolocation((location) => {
-                // The Micro-Packet is compressed to the essentials
-                const microPacket = {
-                    t: Date.now(),
-                    s: status, // Status: Safe, Help, Trapped (Minimal coding for status)
-                    l: `${location.lat},${location.lon}`, // Compressed location string
-                    u: 'user_A1B2C3D4' // Mock user ID (Real app uses authenticated ID)
-                };
-
-                // MOCK TRANSMISSION LOGIC: Prioritizing this packet
-                console.log(`[MICRO-PACKET] Attempting high-priority transmission via simulated low-bandwidth channel (GPRS/Carrier):`, microPacket);
-                
-                // Show success status
-                DOM.microPacketStatus.classList.remove('hidden');
-                // Update text to reflect current status for clarity
-                DOM.microPacketStatus.querySelector('.lang-en').textContent = `${status} packet sent successfully! (See console)`;
-                DOM.microPacketStatus.querySelector('.lang-ceb').textContent = `${status} packet malampusong napadala! (Tan-awa ang console)`;
-                setTimeout(() => DOM.microPacketStatus.classList.add('hidden'), 3000);
+            // Sort by status (Pending/Review first)
+            blotters.sort((a, b) => {
+                if (a.status === 'Decision Ready' && b.status !== 'Decision Ready') return -1;
+                if (a.status !== 'Decision Ready' && b.status === 'Decision Ready') return 1;
+                return b.timestamp?.toMillis() - a.timestamp?.toMillis(); // Latest first
             });
-        }
+
+            const rows = blotters.map(b => {
+                let actionButton = '';
+                if (viewerRole === 'Staff' && b.status !== 'Decision Ready' && b.status !== 'Approved' && b.status !== 'Closed') {
+                    actionButton = `<button data-id="${b.id}" data-type="staff-update" class="text-sm font-medium text-indigo-400 hover:text-indigo-200 transition duration-150">Update/Schedule</button>`;
+                } else if (viewerRole === 'Captain' && b.status === 'Decision Ready') {
+                    actionButton = `
+                        <button data-id="${b.id}" data-type="captain-approve" class="text-sm font-medium text-green-400 hover:text-green-200 mr-2 transition duration-150">Approve</button>
+                        <button data-id="${b.id}" data-type="captain-reject" class="text-sm font-medium text-red-400 hover:text-red-200 transition duration-150">Reject</button>
+                    `;
+                } else if (viewerRole === 'Admin') {
+                    // Admin only views, no direct actions here
+                    actionButton = `<span class="text-gray-500 text-xs">View Only</span>`;
+                }
+
+                return `
+                    <tr class="hover:bg-gray-700/80 transition duration-150 border-t border-gray-700">
+                        <td class="p-3 text-sm font-medium text-indigo-300">${b.blotterId || b.id.substring(0, 8)}...</td>
+                        <td class="p-3 text-sm">${b.incidentType}</td>
+                        <td class="p-3 text-sm text-gray-400 truncate max-w-xs">${b.details.substring(0, 100)}...</td>
+                        <td class="p-3">
+                            <span class="px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(b.status)}">
+                                ${b.status}
+                            </span>
+                        </td>
+                        <td class="p-3 text-sm text-gray-500">${b.mediationDate || 'N/A'}</td>
+                        <td class="p-3 whitespace-nowrap">${actionButton}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            return `
+                <div class="overflow-x-auto rounded-lg shadow-inner">
+                    <table class="min-w-full divide-y divide-gray-700 bg-gray-900/90">
+                        <thead class="bg-gray-700/90">
+                            <tr>
+                                <th class="p-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Case ID</th>
+                                <th class="p-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Type</th>
+                                <th class="p-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Details</th>
+                                <th class="p-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Status</th>
+                                <th class="p-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Schedule</th>
+                                <th class="p-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="blotter-table-body" class="divide-y divide-gray-800">
+                            ${rows}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        };
         
-        // This function simulates preparing the message for a local mesh network (Bluetooth/Wi-Fi Direct P2P).
-        function sendMeshMessage() {
-            const status = DOM.meshStatusSelect.value;
-            const detail = currentLang === 'en' ? DOM.meshMessageTextEn.value.trim() : DOM.meshMessageTextCeb.value.trim();
-            
-            if (!status) {
-                // Use a simple custom message instead of alert()
-                DOM.meshStatus.classList.remove('hidden');
-                DOM.meshStatus.style.color = 'red';
-                DOM.meshStatus.querySelector('.lang-en').textContent = 'Error: Please select a status.';
-                DOM.meshStatus.querySelector('.lang-ceb').textContent = 'Sayop: Palihug pagpili og status.';
-                setTimeout(() => DOM.meshStatus.classList.add('hidden'), 3000);
-                return;
-            }
+        // --- Event Listeners for Dynamic Actions ---
 
-            getGeolocation((location) => {
-                // The Safe-T-Net message is structured for P2P relay
-                const meshMessage = {
-                    t: Date.now(),
-                    status_code: status, // e.g., Safe_Loc, Resource_W
-                    detail: detail.substring(0, 50), // Max 50 chars for efficient relay
-                    location: `${location.lat},${location.lon}`,
-                    sender_id: 'user_A1B2C3D4', // Mock user ID
-                    relay_hops: 0 // Conceptual count of P2P hops
-                };
-
-                // MOCK RELAY LOGIC: Message prepared and waiting for a nearby peer
-                console.log(`[SAFE-T-NET] Message prepared for P2P relay to nearby users:`, meshMessage);
-                
-                // Clear the message box after 'sending'
-                DOM.meshStatusSelect.value = "";
-                DOM.meshMessageTextEn.value = "";
-                DOM.meshMessageTextCeb.value = "";
-
-                // Show success status
-                DOM.meshStatus.style.color = 'var(--tw-colors-blue-400)'; // Reset color
-                DOM.meshStatus.classList.remove('hidden');
-                DOM.meshStatus.querySelector('.lang-en').textContent = 'Message prepared for mesh relay! (See console for mock payload)';
-                DOM.meshStatus.querySelector('.lang-ceb').textContent = 'Andam na ang mensahe para sa mesh relay! (Tan-awa ang console)';
-                setTimeout(() => DOM.meshStatus.classList.add('hidden'), 4000);
-            });
-        }
-
-        // --- INITIALIZATION ---
-
-        function init() {
-            // Initial render of hotlines and language setup
-            renderHotlines();
-            
-            // Language Toggle
-            DOM.langToggle.addEventListener('click', toggleLanguage);
-
-            // Tab Navigation
-            DOM.navButtons.forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    navigateTo(btn.dataset.tab);
-                    // Stop any active tool when switching tabs
-                    hideOverlay();
+        const attachModalEventListeners = () => {
+            document.querySelectorAll('[data-type="staff-update"]').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    const id = e.target.getAttribute('data-id');
+                    showStaffUpdateModal(id);
                 });
             });
 
-            // Toolkit Handlers
-            DOM.flashlightToggle.addEventListener('click', toggleFlashlight);
-            DOM.sirenToggle.addEventListener('click', toggleSiren);
-            DOM.sosToggle.addEventListener('click', toggleSOS);
-
-            // New Comms Module Handlers
-            DOM.microPacketBtns.forEach(btn => {
-                btn.addEventListener('click', () => sendMicroPacket(btn.dataset.status));
+            document.querySelectorAll('[data-type="captain-approve"]').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    const id = e.target.getAttribute('data-id');
+                    showCaptainDecisionModal(id, 'Approve');
+                });
             });
-            DOM.sendMeshMessageBtn.addEventListener('click', sendMeshMessage);
 
-            // Ensure initial guide tab is styled correctly
-            navigateTo('guide');
-        }
+            document.querySelectorAll('[data-type="captain-reject"]').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    const id = e.target.getAttribute('data-id');
+                    showCaptainDecisionModal(id, 'Close'); // Rejecting closes the case
+                });
+            });
+        };
 
-        // Initialize the app on window load
-        window.onload = init;
+        const showStaffUpdateModal = (blotterId) => {
+            blotterToUpdateId = blotterId;
+            const blotter = allBlotters.find(b => b.id === blotterId);
+
+            const modalBody = `
+                <p class="mb-4 text-gray-400">Update status for Case ID: <strong>${blotter.blotterId || blotter.id}</strong></p>
+                <div class="space-y-3">
+                    <div>
+                        <label for="modal-status" class="block text-sm font-medium text-gray-300">New Status</label>
+                        <select id="modal-status" class="w-full p-2 bg-gray-700 border border-gray-600 rounded-lg text-white">
+                            <option value="Filed">Filed</option>
+                            <option value="Review">Under Review</option>
+                            <option value="Scheduled">Scheduled Conciliation/Mediation</option>
+                            <option value="Decision Ready">Ready for Captain Review</option>
+                            <option value="Closed">Closed (Resolved/Withdrawn)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="modal-date" class="block text-sm font-medium text-gray-300">Mediation/Conciliation Date (Optional)</label>
+                        <input type="datetime-local" id="modal-date" class="w-full p-2 bg-gray-700 border border-gray-600 rounded-lg text-white">
+                    </div>
+                    <div>
+                        <label for="modal-remarks" class="block text-sm font-medium text-gray-300">Staff Remarks</label>
+                        <textarea id="modal-remarks" rows="2" class="w-full p-2 bg-gray-700 border border-gray-600 rounded-lg text-white" placeholder="Add notes on the update..."></textarea>
+                    </div>
+                </div>
+            `;
+            
+            showModal('Update Case Details', modalBody, true, () => {
+                const newStatus = document.getElementById('modal-status').value;
+                const date = document.getElementById('modal-date').value;
+                const remarks = document.getElementById('modal-remarks').value;
+                
+                updateBlotterStatus(blotterToUpdateId, newStatus, date, remarks);
+                blotterToUpdateId = null; // Clear ID after use
+            });
+        };
+
+        const showCaptainDecisionModal = (blotterId, action) => {
+            blotterToUpdateId = blotterId;
+            const blotter = allBlotters.find(b => b.id === blotterId);
+            const statusText = action === 'Approve' ? 'APPROVAL' : 'REJECTION (Case Closure)';
+
+            const modalBody = `
+                <p class="mb-4 text-gray-400">Confirm **${statusText}** for Case ID: <strong>${blotter.blotterId || blotter.id}</strong></p>
+                <p class="mb-4 text-sm text-red-300">This action is final and will set the case status to **${action}**.</p>
+                <div>
+                    <label for="captain-remarks" class="block text-sm font-medium text-gray-300">Captain's Decision Notes</label>
+                    <textarea id="captain-remarks" rows="2" class="w-full p-2 bg-gray-700 border border-gray-600 rounded-lg text-white" placeholder="Reason for decision..."></textarea>
+                </div>
+            `;
+            
+            showModal(`Final Decision: ${action}`, modalBody, true, () => {
+                const remarks = document.getElementById('captain-remarks').value;
+                
+                updateBlotterStatus(blotterToUpdateId, action, null, remarks);
+                blotterToUpdateId = null; // Clear ID after use
+            });
+        };
+
+        // Initialize view on load
+        document.addEventListener('DOMContentLoaded', () => {
+            // This ensures the initial view is rendered once Firebase Auth is ready
+            // The actual render is triggered by the onAuthStateChanged in the module script
+            // For now, set the default selection
+            document.getElementById('role-select').value = 'Citizen'; 
+        });
 
     </script>
 </body>
